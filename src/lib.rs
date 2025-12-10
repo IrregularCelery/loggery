@@ -44,12 +44,8 @@ impl Level {
     }
 }
 
-/// Global logger function pointer storage.
-static LOGGER_FN: core::sync::atomic::AtomicPtr<()> =
-    core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
-
 /// Compile-time minimum log level set by feature flags.
-const MIN_LEVEL: Option<u8> = match () {
+const COMPILE_TIME_MIN_LEVEL: Option<u8> = match () {
     _ if cfg!(feature = "min_level_off") => None,
     _ if cfg!(feature = "min_level_trace") => Some(Level::Trace as u8),
     _ if cfg!(feature = "min_level_debug") => Some(Level::Debug as u8),
@@ -59,20 +55,28 @@ const MIN_LEVEL: Option<u8> = match () {
     _ => Some(Level::Trace as u8), // By default, allow all logs
 };
 
+/// Global logger function pointer storage.
+static LOGGER_FN: core::sync::atomic::AtomicPtr<()> =
+    core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
+/// Runtime minimum log level storage.
+static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
+    core::sync::atomic::AtomicU8::new(Level::Trace as u8);
+
 /// Sets the global logger function.
 ///
 /// It's recommended to call once during the initialization.
 ///
 /// # Example
 /// ```
-/// use loggery::{debug, Level};
+/// use loggery::{Level, debug};
 ///
-/// fn my_cusotm_logger(level: Level, args:core::fmt::Arguments) {
+/// fn my_custom_logger(level: Level, args:core::fmt::Arguments) {
 ///     // Your custom implementation
 /// }
 ///
 /// fn main () {
-///     loggery::set_logger(my_cusotm_logger);
+///     loggery::set_logger(my_custom_logger);
+///     loggery::set_min_level(Level::Trace);
 ///
 ///     debug!("A log message using my custom logger!");
 /// }
@@ -89,10 +93,44 @@ pub fn set_logger(logger_fn: LoggerFn) {
     )
 }
 
-/// Returns the compile-time minimum log level.
+/// Set the runtime minimum log level.
+///
+/// Note
+/// This cannot enabled levels that were filtered at compile time.
+/// If compiled with feature `min_level_info`, calling `set_min_level(Level::Debug)` will have
+/// no effect.
+///
+/// # Example
+/// ```
+/// use loggery::{Level, debug, warn};
+///
+/// loggery::set_min_level(Level::Warn);
+///
+/// debug!("This will NOT be logged");
+/// warn!("This will be logged");
+/// ```
+#[inline(always)]
+pub fn set_min_level(level: Level) {
+    RUNTIME_MIN_LEVEL.store(level as u8, core::sync::atomic::Ordering::Release);
+}
+
+/// Returns the effective minimum log level (the stricter of compile-time and runtime levels).
+///
+/// # Example
+/// ```
+/// use loggery::Level;
+///
+/// loggery::set_min_level(Level::Debug);
+///
+/// assert_eq!(loggery::get_min_level(), Some(Level::Debug));
+/// ```
 #[inline(always)]
 pub fn get_min_level() -> Option<Level> {
-    Level::from_u8(MIN_LEVEL?)
+    let compile_time = COMPILE_TIME_MIN_LEVEL?;
+    let runtime = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
+
+    // Return whichever is stricter
+    Level::from_u8(compile_time.max(runtime))
 }
 
 /// Core logging function.
@@ -100,12 +138,18 @@ pub fn get_min_level() -> Option<Level> {
 /// It's recommended to use the macros instead of calling directly.
 #[inline(always)]
 pub fn log(level: Level, args: core::fmt::Arguments) {
-    let is_level_enabled = match MIN_LEVEL {
+    let is_compile_time_enabled = match COMPILE_TIME_MIN_LEVEL {
         Some(min_level) => (level as u8) >= min_level,
         None => false,
     };
 
-    if is_level_enabled && let Some(logger_fn) = get_logger() {
+    let runtime_min_level = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
+    let is_runtime_enabled = (level as u8) >= runtime_min_level;
+
+    if is_compile_time_enabled
+        && is_runtime_enabled
+        && let Some(logger_fn) = get_logger()
+    {
         logger_fn(level, args)
     }
 }
@@ -121,11 +165,11 @@ pub fn log(level: Level, args: core::fmt::Arguments) {
 #[inline(always)]
 fn ptr_to_logger_fn(ptr: *mut ()) -> LoggerFn {
     // SAFETY: `ptr` was created from `LoggerFn` in `set_logger`. Function pointers are 'static.
-    // Atmoics ensure cross-thread visibility.
-    unsafe { core::mem::transmute_copy::<*mut (), LoggerFn>(&ptr) }
+    // Atomics ensure cross-thread visibility.
+    unsafe { core::mem::transmute::<*mut (), LoggerFn>(ptr) }
 }
 
-/// Gets the logger, auto-initializinga default stdout logger if needed (std only).
+/// Gets the logger, auto-initializing a default stdout logger if needed (std only).
 #[cfg(feature = "std")]
 #[inline(always)]
 fn get_logger() -> Option<LoggerFn> {
