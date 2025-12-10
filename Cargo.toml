@@ -1,6 +1,21 @@
 [package]
 name = "loggery"
 version = "0.1.0"
+authors = ["Mohsen Rad (🌱) <irregular.celery@gmail.com>"]
 edition = "2024"
+license = "MIT"
+
+[features]
+default = ["std"]
+
+std = []
+
+# Logging levels (logs below a certain level are ignored)
+min_level_off = []
+min_level_error = []
+min_level_warn = []
+min_level_info = []
+min_level_debug = []
+min_level_trace = []
 
 [dependencies]
