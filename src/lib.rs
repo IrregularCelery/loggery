@@ -1,10 +1,14 @@
+//! A lightweight, `no_std`-friendly logging library for Rust.
+
 #![no_std]
 
 #[cfg(feature = "std")]
 extern crate std;
 
+/// Function type for custom logger implementation.
 pub type LoggerFn = fn(Level, core::fmt::Arguments);
 
+/// Log levels in order of incraesing severity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Level {
@@ -16,6 +20,7 @@ pub enum Level {
 }
 
 impl Level {
+    /// Returns the string representation with consistent width for aligned output.
     pub fn as_str(&self) -> &'static str {
         match self {
             Level::Trace => "TRACE",
@@ -26,6 +31,7 @@ impl Level {
         }
     }
 
+    /// Converts a u8 to a level, returning `None` if invalid.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(Level::Trace),
@@ -38,9 +44,11 @@ impl Level {
     }
 }
 
+/// Global logger function pointer storage.
 static LOGGER_FN: core::sync::atomic::AtomicPtr<()> =
     core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
 
+/// Compile-time minimum log level set by feature flags.
 const MIN_LEVEL: Option<u8> = match () {
     _ if cfg!(feature = "min_level_off") => None,
     _ if cfg!(feature = "min_level_trace") => Some(Level::Trace as u8),
@@ -51,6 +59,28 @@ const MIN_LEVEL: Option<u8> = match () {
     _ => Some(Level::Trace as u8), // By default, allow all logs
 };
 
+/// Sets the global logger function.
+///
+/// It's recommended to call once during the initialization.
+///
+/// # Example
+/// ```
+/// use loggery::{debug, Level};
+///
+/// fn my_cusotm_logger(level: Level, args:core::fmt::Arguments) {
+///     // Your custom implementation
+/// }
+///
+/// fn main () {
+///     loggery::set_logger(my_cusotm_logger);
+///
+///     debug!("A log message using my custom logger!");
+/// }
+/// ```
+///
+/// # Note
+/// When the `std` feature is enabled, a default logger is automatically initialized if no logger
+/// has been set. This function can still be used to override that default.
 #[inline(always)]
 pub fn set_logger(logger_fn: LoggerFn) {
     LOGGER_FN.store(
@@ -59,11 +89,15 @@ pub fn set_logger(logger_fn: LoggerFn) {
     )
 }
 
+/// Returns the compile-time minimum log level.
 #[inline(always)]
 pub fn get_min_level() -> Option<Level> {
     Level::from_u8(MIN_LEVEL?)
 }
 
+/// Core logging function.
+///
+/// It's recommended to use the macros instead of calling directly.
 #[inline(always)]
 pub fn log(level: Level, args: core::fmt::Arguments) {
     let is_level_enabled = match MIN_LEVEL {
@@ -76,6 +110,14 @@ pub fn log(level: Level, args: core::fmt::Arguments) {
     }
 }
 
+/// Converts a raw pointer back to a `LoggerFn`.
+///
+/// # Safety
+/// Safe only when `ptr` was created by casting a valid `LoggerFn` to `*mut ()`.
+/// The caller must ensure:
+/// - Pointer originated from a valid function pointer cast
+/// - Fnuction pointer has 'static lifetime (guaranteed for all fn pointers)
+/// - Proper synchronization (handled by atomic ops)
 #[inline(always)]
 fn ptr_to_logger_fn(ptr: *mut ()) -> LoggerFn {
     // SAFETY: `ptr` was created from `LoggerFn` in `set_logger`. Function pointers are 'static.
@@ -83,6 +125,7 @@ fn ptr_to_logger_fn(ptr: *mut ()) -> LoggerFn {
     unsafe { core::mem::transmute_copy::<*mut (), LoggerFn>(&ptr) }
 }
 
+/// Gets the logger, auto-initializinga default stdout logger if needed (std only).
 #[cfg(feature = "std")]
 #[inline(always)]
 fn get_logger() -> Option<LoggerFn> {
@@ -105,6 +148,7 @@ fn get_logger() -> Option<LoggerFn> {
     Some(ptr_to_logger_fn(ptr))
 }
 
+/// Gets the logger, Returns `None` if not set (no_std).
 #[cfg(not(feature = "std"))]
 #[inline(always)]
 fn get_logger() -> Option<LoggerFn> {
@@ -117,11 +161,24 @@ fn get_logger() -> Option<LoggerFn> {
     Some(ptr_to_logger_fn(ptr))
 }
 
+/// Default stdout logger (std only).
 #[cfg(feature = "std")]
 fn std_logger_fn(level: Level, args: core::fmt::Arguments) {
     std::println!("[{}] {}", level.as_str(), args)
 }
 
+/// Logs a message at the `trace` level.
+///
+/// # Example
+/// ```
+/// use loggery::trace;
+///
+/// trace!("Entering function...");
+/// ```
+///
+/// # Compile-time filtering
+/// If feature `min_level_debug` or higher is enabled, this compiles to nothing in release builds
+/// with optimizations.
 #[macro_export]
 macro_rules! trace {
     ($($arg:tt)*) => {
@@ -129,6 +186,20 @@ macro_rules! trace {
     };
 }
 
+/// Logs a message at the `debug` level.
+///
+/// # Example
+/// ```
+/// use loggery::debug;
+///
+/// let x = 69;
+///
+/// debug!("Variable `x` is {}", x);
+/// ```
+///
+/// # Compile-time filtering
+/// If feature `min_level_info` or higher is enabled, this compiles to nothing in release builds
+/// with optimizations.
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
@@ -136,6 +207,20 @@ macro_rules! debug {
     };
 }
 
+/// Logs a message at the `info` level.
+///
+/// # Example
+/// ```
+/// use loggery::info;
+///
+/// const PORT: u16 = 8080;
+///
+/// info!("Server is started on port {}", PORT);
+/// ```
+///
+/// # Compile-time filtering
+/// If feature `min_level_warn` or higher is enabled, this compiles to nothing in release builds
+/// with optimizations.
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
@@ -143,6 +228,18 @@ macro_rules! info {
     };
 }
 
+/// Logs a message at the `warn` level.
+///
+/// # Example
+/// ```
+/// use loggery::warn;
+///
+/// warn!("Configuration file not found, using defaults");
+/// ```
+///
+/// # Compile-time filtering
+/// If feature `min_level_error` or higher is enabled, this compiles to nothing in release builds
+/// with optimizations.
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
@@ -150,6 +247,18 @@ macro_rules! warn {
     };
 }
 
+/// Logs a message at the `error` level.
+///
+/// # Example
+/// ```
+/// use loggery::error;
+///
+/// error!("Failed to connect to database!");
+/// ```
+///
+/// # Compile-time filtering
+/// If feature `min_level_off` or higher is enabled, this compiles to nothing in release builds
+/// with optimizations.
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {

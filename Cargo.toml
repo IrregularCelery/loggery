@@ -11,11 +11,11 @@ default = ["std"]
 std = []
 
 # Logging levels (logs below a certain level are ignored)
+min_level_off = []
 min_level_trace = []
 min_level_debug = []
 min_level_info = []
 min_level_warn = []
 min_level_error = []
-min_level_off = []
 
 [dependencies]
