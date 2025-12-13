@@ -2,13 +2,15 @@
 name = "loggery"
 version = "0.1.0"
 authors = ["Mohsen Rad (🌱) <irregular.celery@gmail.com>"]
-edition = "2024"
+edition = "2021"
+rust-version = "1.56.0"
 license = "MIT"
 
 [features]
-default = ["std"]
+default = ["std", "runtime_level"]
 
 std = []
+runtime_level = []
 
 # Logging levels (logs below a certain level are ignored)
 min_level_off = []
