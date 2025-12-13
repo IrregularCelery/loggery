@@ -26,7 +26,7 @@
 //! ```
 //! use loggery::{Level, debug};
 //!
-//! fn my_custom_logger(level: Level, args:core::fmt::Arguments) {
+//! fn my_custom_logger(payload: Payload) {
 //!     // Your custom implementation
 //! }
 //!
@@ -54,7 +54,7 @@
 //! use loggery::{Level, debug};
 //!
 //! #[no_mangle]
-//! pub extern "Rust" fn __loggery_log_impl(level: Level, args: core::fmt::Arguments) {
+//! pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
 //!     // Your custom implementation
 //! }
 //!
@@ -82,9 +82,6 @@
 
 #[cfg(feature = "std")]
 extern crate std;
-
-/// Function type for custom logger implementation.
-pub type LoggerFn = fn(Level, core::fmt::Arguments);
 
 /// Log levels in order of incraesing severity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -124,6 +121,14 @@ impl Level {
     }
 }
 
+pub struct Payload<'a> {
+    pub level: Level,
+    pub args: core::fmt::Arguments<'a>,
+}
+
+/// Function type for custom logger implementation.
+pub type LoggerFn = fn(Payload);
+
 /// Compile-time minimum log level set by `min_level_*` feature flags.
 ///
 /// If no specific level is set, all logs are enabled by default (`min_level_trace`).
@@ -145,13 +150,13 @@ extern "Rust" {
     /// When the `static` feature is enabled, you must define this function in your binary crate:
     /// ```
     /// #[no_mangle]
-    /// pub extern "Rust" fn __loggery_log_impl(level: Level, args: core::fmt::Arguments) {
+    /// pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
     ///     // Your custom implementation
     /// }
     /// ```
     ///
     /// Not providing this function will result in a linker error!
-    fn __loggery_log_impl(level: Level, args: core::fmt::Arguments);
+    fn __loggery_log_impl(payload: Payload);
 }
 
 /// Global logger function pointer storage. (NOT `static` feature)
@@ -172,7 +177,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// ```
 /// use loggery::{Level, debug};
 ///
-/// fn my_custom_logger(level: Level, args:core::fmt::Arguments) {
+/// fn my_custom_logger(payload: Payload) {
 ///     // Your custom implementation
 /// }
 ///
@@ -191,7 +196,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// use loggery::Level;
 ///
 /// #[no_mangle]
-/// pub extern "Rust" fn __loggery_log_impl(level: Level, args: core::fmt::Arguments) {
+/// pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
 ///     // Your custom implementation
 /// }
 /// ```
@@ -266,9 +271,9 @@ pub fn get_min_level() -> Option<Level> {
 ///
 /// It's recommended to use the macros instead of calling directly.
 #[inline(always)]
-pub fn log(level: Level, args: core::fmt::Arguments) {
+pub fn log(payload: Payload) {
     let is_compile_time_enabled = match COMPILE_TIME_MIN_LEVEL {
-        Some(min_level) => (level as u8) >= min_level,
+        Some(level) => (payload.level as u8) >= level,
         None => false,
     };
 
@@ -280,20 +285,20 @@ pub fn log(level: Level, args: core::fmt::Arguments) {
     {
         let runtime_min_level = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
 
-        if (level as u8) < runtime_min_level {
+        if (payload.level as u8) < runtime_min_level {
             return;
         }
     }
 
     #[cfg(feature = "static")]
     {
-        unsafe { __loggery_log_impl(level, args) };
+        unsafe { __loggery_log_impl(payload) };
     }
 
     #[cfg(not(feature = "static"))]
     {
         if let Some(logger_fn) = get_logger() {
-            logger_fn(level, args)
+            logger_fn(payload)
         }
     }
 }
@@ -352,8 +357,8 @@ fn get_logger() -> Option<LoggerFn> {
 
 /// Default stdout logger (`std` feature).
 #[cfg(all(feature = "std", not(feature = "static")))]
-fn std_logger_fn(level: Level, args: core::fmt::Arguments) {
-    std::println!("[{}] {}", level.as_str(), args)
+fn std_logger_fn(payload: Payload) {
+    std::println!("[{}] {}", payload.level.as_str(), payload.args)
 }
 
 /// Logs a message at the `trace` level.
@@ -372,7 +377,10 @@ fn std_logger_fn(level: Level, args: core::fmt::Arguments) {
 #[macro_export]
 macro_rules! trace {
     ($($arg:tt)*) => {
-        $crate::log($crate::Level::Trace, format_args!($($arg)*))
+        $crate::log($crate::Payload {
+            level: $crate::Level::Trace,
+            args: format_args!($($arg)*)
+        })
     };
 }
 
@@ -394,7 +402,10 @@ macro_rules! trace {
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
-        $crate::log($crate::Level::Debug, format_args!($($arg)*))
+        $crate::log($crate::Payload {
+            level: $crate::Level::Debug,
+            args: format_args!($($arg)*)
+        })
     };
 }
 
@@ -416,7 +427,10 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
-        $crate::log($crate::Level::Info, format_args!($($arg)*))
+        $crate::log($crate::Payload {
+            level: $crate::Level::Info,
+            args: format_args!($($arg)*)
+        })
     };
 }
 
@@ -436,7 +450,10 @@ macro_rules! info {
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
-        $crate::log($crate::Level::Warn, format_args!($($arg)*))
+        $crate::log($crate::Payload {
+            level: $crate::Level::Warn,
+            args: format_args!($($arg)*)
+        })
     };
 }
 
@@ -456,17 +473,20 @@ macro_rules! warn {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
-        $crate::log($crate::Level::Error, format_args!($($arg)*))
+        $crate::log($crate::Payload {
+            level: $crate::Level::Error,
+            args: format_args!($($arg)*)
+        })
     };
 }
 
 #[cfg(all(feature = "std", feature = "static"))]
 mod std_static {
-    use crate::Level;
+    use crate::Payload;
 
     /// Default logger implementation for when the `std` and `static` features are enabled.
     #[no_mangle]
-    pub extern "Rust" fn __loggery_log_impl(level: Level, args: core::fmt::Arguments) {
-        std::println!("[{}] {}", level.as_str(), args)
+    pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
+        std::println!("[{}] {}", payload.level.as_str(), payload.args)
     }
 }
