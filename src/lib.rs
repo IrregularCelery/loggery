@@ -1,4 +1,82 @@
-//! A lightweight, `no_std`-friendly logging library for Rust.
+//! A lightweight, `no_std`-friendly logging library for Rust
+//! with support for compile-time filtering and optional runtime level control.
+//!
+//! # Usage
+//!
+//! Add `loggery` to your `Cargo.toml`:
+//! ```toml
+//! [dependencies]
+//! loggery = "0.1.0"
+//! ```
+//!
+//! Then use the logging macros:
+//!
+//! ```
+//! use loggery::{trace, debug, info, warn, error};
+//!
+//! trace!("This is a TRACE log!");
+//! debug!("This is a DEBUG log!");
+//! info!("This is an INFO log!");
+//! warn!("This is a WARN log!");
+//! error!("This is an ERROR log!");
+//! ```
+//!
+//! # Custom Logger
+//!
+//! ```
+//! use loggery::{Level, debug};
+//!
+//! fn my_custom_logger(level: Level, args:core::fmt::Arguments) {
+//!     // Your custom implementation
+//! }
+//!
+//! fn main () {
+//!     loggery::set_logger(my_custom_logger);
+//!     loggery::set_min_level(Level::Trace);
+//!
+//!     debug!("A log message using my custom logger!");
+//! }
+//! ```
+//!
+//! # Static Logger
+//!
+//! For maximum performance in embedded or performance-critical applications, use the `static`
+//! feature to remove the runtime indirection. Your logger is linked directly at compile time:
+//!
+//! ```toml
+//! [dependencies]
+//! loggery = { version = "0.1.0", default-features = false, features = ["static"]}
+//! ```
+//!
+//! Then define your logger implementation in your binary crate:
+//!
+//! ```
+//! use loggery::{Level, debug};
+//!
+//! #[no_mangle]
+//! pub extern "Rust" fn __loggery_log_impl(level: Level, args: core::fmt::Arguments) {
+//!     // Your custom implementation
+//! }
+//!
+//! fn main() {
+//!     debug!("Direct call from custom static implementation!")
+//! }
+//! ```
+//! **Note:** Even with `static` feature, you can still use the `runtime_level` feature and
+//! therefore the [`set_min_level`] function to do runtime log level filtering.
+//!
+//! # Features
+//! > **Default features:** `std`, `runtime_level`
+//! - `std`: Enables default stdout logger
+//! - `static`: Enables static extern logger definition
+//! - `runtime_level`: Allows changing log level filtering at runtime
+//! - `min_level_*`: Compile-time log level filtering
+//!     - `min_level_off`: Disables all the logs
+//!     - `min_level_trace`: Enables log levels ([`trace`], [`debug`], [`info`], [`warn`], [`error`])
+//!     - `min_level_debug`: Enables log levels ([`debug`], [`info`], [`warn`], [`error`])
+//!     - `min_level_info`:  Enables log levels ([`info`], [`warn`], [`error`])
+//!     - `min_level_warn`:  Enables log levels ([`warn`], [`error`])
+//!     - `min_level_error`: Enables log levels ([`error`])
 
 #![no_std]
 
@@ -20,7 +98,8 @@ pub enum Level {
 }
 
 impl Level {
-    /// Returns the string representation with consistent width for aligned output.
+    /// Returns the string representation with consistent width for right aligned output.
+    #[inline(always)]
     pub fn as_str(&self) -> &'static str {
         match self {
             Level::Trace => "TRACE",
@@ -32,6 +111,7 @@ impl Level {
     }
 
     /// Converts a u8 to a level, returning `None` if invalid.
+    #[inline(always)]
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(Level::Trace),
@@ -44,7 +124,9 @@ impl Level {
     }
 }
 
-/// Compile-time minimum log level set by feature flags.
+/// Compile-time minimum log level set by `min_level_*` feature flags.
+///
+/// If no specific level is set, all logs are enabled by default (`min_level_trace`).
 const COMPILE_TIME_MIN_LEVEL: Option<u8> = match () {
     _ if cfg!(feature = "min_level_off") => None,
     _ if cfg!(feature = "min_level_trace") => Some(Level::Trace as u8),
@@ -55,18 +137,38 @@ const COMPILE_TIME_MIN_LEVEL: Option<u8> = match () {
     _ => Some(Level::Trace as u8), // By default, allow all logs
 };
 
-/// Global logger function pointer storage.
+#[cfg(feature = "static")]
+extern "Rust" {
+    /// External logger implementation that must be provided when using the `static` feature.
+    ///
+    /// # Safety
+    /// When the `static` feature is enabled, you must define this function in your binary crate:
+    /// ```
+    /// #[no_mangle]
+    /// pub extern "Rust" fn __loggery_log_impl(level: Level, args: core::fmt::Arguments) {
+    ///     // Your custom implementation
+    /// }
+    /// ```
+    ///
+    /// Not providing this function will result in a linker error!
+    fn __loggery_log_impl(level: Level, args: core::fmt::Arguments);
+}
+
+/// Global logger function pointer storage. (NOT `static` feature)
+#[cfg(not(feature = "static"))]
 static LOGGER_FN: core::sync::atomic::AtomicPtr<()> =
     core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
-/// Runtime minimum log level storage.
+/// Runtime minimum log level storage. (`runtime_level` feature)
+#[cfg(feature = "runtime_level")]
 static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
     core::sync::atomic::AtomicU8::new(Level::Trace as u8);
 
-/// Sets the global logger function.
+/// Sets the global logger function. (NOT `static` feature)
 ///
 /// It's recommended to call once during the initialization.
 ///
 /// # Example
+///
 /// ```
 /// use loggery::{Level, debug};
 ///
@@ -83,8 +185,19 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// ```
 ///
 /// # Note
+/// When the `static` feature is enabled, this function isn't available. Instead, you must define
+/// this function in your binary crate:
+/// ```
+/// use loggery::Level;
+///
+/// #[no_mangle]
+/// pub extern "Rust" fn __loggery_log_impl(level: Level, args: core::fmt::Arguments) {
+///     // Your custom implementation
+/// }
+/// ```
 /// When the `std` feature is enabled, a default logger is automatically initialized if no logger
 /// has been set. This function can still be used to override that default.
+#[cfg(not(feature = "static"))]
 #[inline(always)]
 pub fn set_logger(logger_fn: LoggerFn) {
     LOGGER_FN.store(
@@ -93,14 +206,15 @@ pub fn set_logger(logger_fn: LoggerFn) {
     )
 }
 
-/// Set the runtime minimum log level.
+/// Set the runtime minimum log level. (`runtime_level` feature)
 ///
-/// Note
-/// This cannot enabled levels that were filtered at compile time.
+/// # Note
+/// This cannot enable levels that were filtered at compile time.
 /// If compiled with feature `min_level_info`, calling `set_min_level(Level::Debug)` will have
 /// no effect.
 ///
 /// # Example
+///
 /// ```
 /// use loggery::{Level, debug, warn};
 ///
@@ -109,6 +223,9 @@ pub fn set_logger(logger_fn: LoggerFn) {
 /// debug!("This will NOT be logged");
 /// warn!("This will be logged");
 /// ```
+/// If the `runtime_level` feature *isn't* enabled, you can use the `min_level_*` features for
+/// compile-time level filtering.
+#[cfg(feature = "runtime_level")]
 #[inline(always)]
 pub fn set_min_level(level: Level) {
     RUNTIME_MIN_LEVEL.store(level as u8, core::sync::atomic::Ordering::Release);
@@ -117,6 +234,7 @@ pub fn set_min_level(level: Level) {
 /// Returns the effective minimum log level (the stricter of compile-time and runtime levels).
 ///
 /// # Example
+///
 /// ```
 /// use loggery::Level;
 ///
@@ -127,13 +245,24 @@ pub fn set_min_level(level: Level) {
 #[inline(always)]
 pub fn get_min_level() -> Option<Level> {
     let compile_time = COMPILE_TIME_MIN_LEVEL?;
-    let runtime = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
 
-    // Return whichever is stricter
-    Level::from_u8(compile_time.max(runtime))
+    let level = {
+        #[cfg(feature = "runtime_level")]
+        {
+            let runtime = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
+
+            // Return whichever is stricter (higher level)
+            compile_time.max(runtime)
+        }
+
+        #[cfg(not(feature = "runtime_level"))]
+        compile_time
+    };
+
+    Level::from_u8(level)
 }
 
-/// Core logging function.
+/// Core logging entry point used internally by macros like [`debug!`] and [`error!`].
 ///
 /// It's recommended to use the macros instead of calling directly.
 #[inline(always)]
@@ -143,14 +272,29 @@ pub fn log(level: Level, args: core::fmt::Arguments) {
         None => false,
     };
 
-    let runtime_min_level = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
-    let is_runtime_enabled = (level as u8) >= runtime_min_level;
+    if !is_compile_time_enabled {
+        return;
+    }
 
-    if is_compile_time_enabled
-        && is_runtime_enabled
-        && let Some(logger_fn) = get_logger()
+    #[cfg(feature = "runtime_level")]
     {
-        logger_fn(level, args)
+        let runtime_min_level = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
+
+        if (level as u8) < runtime_min_level {
+            return;
+        }
+    }
+
+    #[cfg(feature = "static")]
+    {
+        unsafe { __loggery_log_impl(level, args) };
+    }
+
+    #[cfg(not(feature = "static"))]
+    {
+        if let Some(logger_fn) = get_logger() {
+            logger_fn(level, args)
+        }
     }
 }
 
@@ -162,6 +306,7 @@ pub fn log(level: Level, args: core::fmt::Arguments) {
 /// - Pointer originated from a valid function pointer cast
 /// - Fnuction pointer has 'static lifetime (guaranteed for all fn pointers)
 /// - Proper synchronization (handled by atomic ops)
+#[cfg(not(feature = "static"))]
 #[inline(always)]
 fn ptr_to_logger_fn(ptr: *mut ()) -> LoggerFn {
     // SAFETY: `ptr` was created from `LoggerFn` in `set_logger`. Function pointers are 'static.
@@ -169,8 +314,8 @@ fn ptr_to_logger_fn(ptr: *mut ()) -> LoggerFn {
     unsafe { core::mem::transmute::<*mut (), LoggerFn>(ptr) }
 }
 
-/// Gets the logger, auto-initializing a default stdout logger if needed (std only).
-#[cfg(feature = "std")]
+/// Gets the logger, auto-initializing a default stdout logger if needed (`std` feature).
+#[cfg(all(feature = "std", not(feature = "static")))]
 #[inline(always)]
 fn get_logger() -> Option<LoggerFn> {
     let ptr = LOGGER_FN.load(core::sync::atomic::Ordering::Acquire);
@@ -193,7 +338,7 @@ fn get_logger() -> Option<LoggerFn> {
 }
 
 /// Gets the logger, Returns `None` if not set (no_std).
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "static")))]
 #[inline(always)]
 fn get_logger() -> Option<LoggerFn> {
     let ptr = LOGGER_FN.load(core::sync::atomic::Ordering::Acquire);
@@ -205,8 +350,8 @@ fn get_logger() -> Option<LoggerFn> {
     Some(ptr_to_logger_fn(ptr))
 }
 
-/// Default stdout logger (std only).
-#[cfg(feature = "std")]
+/// Default stdout logger (`std` feature).
+#[cfg(all(feature = "std", not(feature = "static")))]
 fn std_logger_fn(level: Level, args: core::fmt::Arguments) {
     std::println!("[{}] {}", level.as_str(), args)
 }
@@ -214,6 +359,7 @@ fn std_logger_fn(level: Level, args: core::fmt::Arguments) {
 /// Logs a message at the `trace` level.
 ///
 /// # Example
+///
 /// ```
 /// use loggery::trace;
 ///
@@ -233,6 +379,7 @@ macro_rules! trace {
 /// Logs a message at the `debug` level.
 ///
 /// # Example
+///
 /// ```
 /// use loggery::debug;
 ///
@@ -254,6 +401,7 @@ macro_rules! debug {
 /// Logs a message at the `info` level.
 ///
 /// # Example
+///
 /// ```
 /// use loggery::info;
 ///
@@ -275,6 +423,7 @@ macro_rules! info {
 /// Logs a message at the `warn` level.
 ///
 /// # Example
+///
 /// ```
 /// use loggery::warn;
 ///
@@ -294,6 +443,7 @@ macro_rules! warn {
 /// Logs a message at the `error` level.
 ///
 /// # Example
+///
 /// ```
 /// use loggery::error;
 ///
@@ -308,4 +458,15 @@ macro_rules! error {
     ($($arg:tt)*) => {
         $crate::log($crate::Level::Error, format_args!($($arg)*))
     };
+}
+
+#[cfg(all(feature = "std", feature = "static"))]
+mod std_static {
+    use crate::Level;
+
+    /// Default logger implementation for when the `std` and `static` features are enabled.
+    #[no_mangle]
+    pub extern "Rust" fn __loggery_log_impl(level: Level, args: core::fmt::Arguments) {
+        std::println!("[{}] {}", level.as_str(), args)
+    }
 }
