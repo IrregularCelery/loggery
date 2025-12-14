@@ -215,10 +215,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 #[cfg(not(feature = "static"))]
 #[inline(always)]
 pub fn set_logger(logger_fn: LoggerFn) {
-    LOGGER_FN.store(
-        logger_fn as usize as *mut (),
-        core::sync::atomic::Ordering::Release,
-    )
+    LOGGER_FN.store(logger_fn as *mut (), core::sync::atomic::Ordering::Release)
 }
 
 /// Set the runtime minimum log level. (`runtime_level` feature)
@@ -544,7 +541,11 @@ mod stdout {
     /// Default stdout logger (`std` feature).
     #[inline(always)]
     pub(super) fn logger_fn(payload: Payload) {
-        std::println!("[{}] {}", payload.level.as_str(), payload.args)
+        use std::io::Write as _;
+
+        let stdout = std::io::stdout();
+        let mut handle = stdout.lock();
+        let _ = writeln!(handle, "[{}] {}", payload.level.as_str(), payload.args);
     }
 
     /// Default logger implementation for when the `std` and `static` features are enabled.
