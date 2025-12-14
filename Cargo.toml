@@ -7,12 +7,12 @@ rust-version = "1.56.0"
 license = "MIT"
 
 [features]
-default = ["std", "metadata", "runtime_level"]
+default = ["std", "metadata", "runtime_levels"]
 
 std = []
 static = []
 metadata = []
-runtime_level = []
+runtime_levels = []
 
 # Logging levels (logs below a certain level are ignored)
 min_level_off = []

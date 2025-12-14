@@ -62,15 +62,16 @@
 //!     debug!("Direct call from custom static implementation!")
 //! }
 //! ```
-//! **Note:** Even with `static` feature, you can still use the `runtime_level` feature and
+//! **Note:** Even with `static` feature, you can still use the `runtime_levels` feature and
 //! therefore the [`set_min_level`] function to do runtime log level filtering.
 //!
 //! # Features
-//! > **Default features:** `std`, `runtime_level`
+//!
+//! > **Default features:** `std`, `runtime_levels`
 //! - `std`: Enables default stdout logger
 //! - `static`: Enables static extern logger definition
 //! - `metadata`: Enables `meta` field in the [`Payload`]
-//! - `runtime_level`: Allows changing log level filtering at runtime
+//! - `runtime_levels`: Allows changing log level filtering at runtime
 //! - `min_level_*`: Compile-time log level filtering
 //!     - `min_level_off`: Disables all the logs
 //!     - `min_level_trace`: Enables log levels ([`trace`], [`debug`], [`info`], [`warn`], [`error`])
@@ -157,6 +158,7 @@ extern "Rust" {
     /// External logger implementation that must be provided when using the `static` feature.
     ///
     /// # Safety
+    ///
     /// When the `static` feature is enabled, you must define this function in your binary crate:
     /// ```
     /// #[no_mangle]
@@ -173,8 +175,8 @@ extern "Rust" {
 #[cfg(not(feature = "static"))]
 static LOGGER_FN: core::sync::atomic::AtomicPtr<()> =
     core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
-/// Runtime minimum log level storage. (`runtime_level` feature)
-#[cfg(feature = "runtime_level")]
+/// Runtime minimum log level storage. (`runtime_levels` feature)
+#[cfg(feature = "runtime_levels")]
 static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
     core::sync::atomic::AtomicU8::new(Level::Trace as u8);
 
@@ -200,6 +202,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// ```
 ///
 /// # Note
+///
 /// When the `static` feature is enabled, this function isn't available. Instead, you must define
 /// this function in your binary crate:
 /// ```
@@ -221,9 +224,10 @@ pub fn set_logger(logger_fn: LoggerFn) {
     )
 }
 
-/// Set the runtime minimum log level. (`runtime_level` feature)
+/// Set the runtime minimum log level. (`runtime_levels` feature)
 ///
 /// # Note
+///
 /// This cannot enable levels that were filtered at compile time.
 /// If compiled with feature `min_level_info`, calling `set_min_level(Level::Debug)` will have
 /// no effect.
@@ -238,9 +242,9 @@ pub fn set_logger(logger_fn: LoggerFn) {
 /// debug!("This will NOT be logged");
 /// warn!("This will be logged");
 /// ```
-/// If the `runtime_level` feature *isn't* enabled, you can use the `min_level_*` features for
+/// If the `runtime_levels` feature *isn't* enabled, you can use the `min_level_*` features for
 /// compile-time level filtering.
-#[cfg(feature = "runtime_level")]
+#[cfg(feature = "runtime_levels")]
 #[inline(always)]
 pub fn set_min_level(level: Level) {
     RUNTIME_MIN_LEVEL.store(level as u8, core::sync::atomic::Ordering::Release);
@@ -262,7 +266,7 @@ pub fn get_min_level() -> Option<Level> {
     let compile_time = COMPILE_TIME_MIN_LEVEL?;
 
     let level = {
-        #[cfg(feature = "runtime_level")]
+        #[cfg(feature = "runtime_levels")]
         {
             let runtime = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
 
@@ -270,7 +274,7 @@ pub fn get_min_level() -> Option<Level> {
             compile_time.max(runtime)
         }
 
-        #[cfg(not(feature = "runtime_level"))]
+        #[cfg(not(feature = "runtime_levels"))]
         compile_time
     };
 
@@ -291,7 +295,7 @@ pub fn log(payload: Payload) {
         return;
     }
 
-    #[cfg(feature = "runtime_level")]
+    #[cfg(feature = "runtime_levels")]
     {
         let runtime_min_level = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
 
@@ -316,6 +320,7 @@ pub fn log(payload: Payload) {
 /// Converts a raw pointer back to a `LoggerFn`.
 ///
 /// # Safety
+///
 /// Safe only when `ptr` was created by casting a valid `LoggerFn` to `*mut ()`.
 /// The caller must ensure:
 /// - Pointer originated from a valid function pointer cast
@@ -441,6 +446,7 @@ macro_rules! log {
 /// ```
 ///
 /// # Compile-time filtering
+///
 /// If feature `min_level_debug` or higher is enabled, this compiles to nothing in release builds
 /// with optimizations.
 #[macro_export]
@@ -463,6 +469,7 @@ macro_rules! trace {
 /// ```
 ///
 /// # Compile-time filtering
+///
 /// If feature `min_level_info` or higher is enabled, this compiles to nothing in release builds
 /// with optimizations.
 #[macro_export]
@@ -485,6 +492,7 @@ macro_rules! debug {
 /// ```
 ///
 /// # Compile-time filtering
+///
 /// If feature `min_level_warn` or higher is enabled, this compiles to nothing in release builds
 /// with optimizations.
 #[macro_export]
@@ -505,6 +513,7 @@ macro_rules! info {
 /// ```
 ///
 /// # Compile-time filtering
+///
 /// If feature `min_level_error` or higher is enabled, this compiles to nothing in release builds
 /// with optimizations.
 #[macro_export]
@@ -525,6 +534,7 @@ macro_rules! warn {
 /// ```
 ///
 /// # Compile-time filtering
+///
 /// If feature `min_level_off` or higher is enabled, this compiles to nothing in release builds
 /// with optimizations.
 #[macro_export]
