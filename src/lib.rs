@@ -62,16 +62,16 @@
 //!     debug!("Direct call from custom static implementation!")
 //! }
 //! ```
-//! **Note:** Even with `static` feature, you can still use the `runtime_levels` feature and
+//! **Note:** Even with `static` feature, you can still use the `runtime_level` feature and
 //! therefore the [`set_min_level`] function to do runtime log level filtering.
 //!
 //! # Features
 //!
-//! > **Default features:** `std`, `runtime_levels`
+//! > **Default features:** `std`, `runtime_level`
 //! - `std`: Enables default stdout logger
 //! - `static`: Enables static extern logger definition
 //! - `metadata`: Enables `meta` field in the [`Payload`]
-//! - `runtime_levels`: Allows changing log level filtering at runtime
+//! - `runtime_level`: Allows changing log level filtering at runtime
 //! - `min_level_*`: Compile-time log level filtering
 //!     - `min_level_off`: Disables all the logs
 //!     - `min_level_trace`: Enables log levels ([`trace`], [`debug`], [`info`], [`warn`], [`error`])
@@ -175,8 +175,8 @@ extern "Rust" {
 #[cfg(not(feature = "static"))]
 static LOGGER_FN: core::sync::atomic::AtomicPtr<()> =
     core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
-/// Runtime minimum log level storage. (`runtime_levels` feature)
-#[cfg(feature = "runtime_levels")]
+/// Runtime minimum log level storage. (`runtime_level` feature)
+#[cfg(feature = "runtime_level")]
 static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
     core::sync::atomic::AtomicU8::new(Level::Trace as u8);
 
@@ -224,7 +224,7 @@ pub fn set_logger(logger_fn: LoggerFn) {
     )
 }
 
-/// Set the runtime minimum log level. (`runtime_levels` feature)
+/// Set the runtime minimum log level. (`runtime_level` feature)
 ///
 /// # Note
 ///
@@ -242,9 +242,9 @@ pub fn set_logger(logger_fn: LoggerFn) {
 /// debug!("This will NOT be logged");
 /// warn!("This will be logged");
 /// ```
-/// If the `runtime_levels` feature *isn't* enabled, you can use the `min_level_*` features for
+/// If the `runtime_level` feature *isn't* enabled, you can use the `min_level_*` features for
 /// compile-time level filtering.
-#[cfg(feature = "runtime_levels")]
+#[cfg(feature = "runtime_level")]
 #[inline(always)]
 pub fn set_min_level(level: Level) {
     RUNTIME_MIN_LEVEL.store(level as u8, core::sync::atomic::Ordering::Release);
@@ -266,7 +266,7 @@ pub fn get_min_level() -> Option<Level> {
     let compile_time = COMPILE_TIME_MIN_LEVEL?;
 
     let level = {
-        #[cfg(feature = "runtime_levels")]
+        #[cfg(feature = "runtime_level")]
         {
             let runtime = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
 
@@ -274,7 +274,7 @@ pub fn get_min_level() -> Option<Level> {
             compile_time.max(runtime)
         }
 
-        #[cfg(not(feature = "runtime_levels"))]
+        #[cfg(not(feature = "runtime_level"))]
         compile_time
     };
 
@@ -295,7 +295,7 @@ pub fn log(payload: Payload) {
         return;
     }
 
-    #[cfg(feature = "runtime_levels")]
+    #[cfg(feature = "runtime_level")]
     {
         let runtime_min_level = RUNTIME_MIN_LEVEL.load(core::sync::atomic::Ordering::Relaxed);
 
