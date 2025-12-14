@@ -24,7 +24,7 @@
 //! # Custom Logger
 //!
 //! ```
-//! use loggery::{Level, debug};
+//! use loggery::{Payload, Level, debug};
 //!
 //! fn my_custom_logger(payload: Payload) {
 //!     // Your custom implementation
@@ -51,7 +51,7 @@
 //! Then define your logger implementation in your binary crate:
 //!
 //! ```
-//! use loggery::{Level, debug};
+//! use loggery::{Payload, debug};
 //!
 //! #[no_mangle]
 //! pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
@@ -121,9 +121,16 @@ impl Level {
     }
 }
 
+pub struct Metadata {
+    pub module_path: &'static str,
+    pub file: &'static str,
+    pub line: u32,
+}
+
 pub struct Payload<'a> {
     pub level: Level,
     pub args: core::fmt::Arguments<'a>,
+    pub meta: Metadata,
 }
 
 /// Function type for custom logger implementation.
@@ -175,7 +182,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// # Example
 ///
 /// ```
-/// use loggery::{Level, debug};
+/// use loggery::{Payload, Level, debug};
 ///
 /// fn my_custom_logger(payload: Payload) {
 ///     // Your custom implementation
@@ -193,7 +200,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// When the `static` feature is enabled, this function isn't available. Instead, you must define
 /// this function in your binary crate:
 /// ```
-/// use loggery::Level;
+/// use loggery::Payload;
 ///
 /// #[no_mangle]
 /// pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
@@ -361,6 +368,40 @@ fn std_logger_fn(payload: Payload) {
     std::println!("[{}] {}", payload.level.as_str(), payload.args)
 }
 
+/// Logs a message at the specified level.
+///
+/// This is the underlying macro used by [`trace!`], [`debug!`], [`info!`], [`warn!`] and [`error!`].
+/// While you mostly use those level-specific macros, `log!` can be useful when you want to specify
+/// the log level dynamically or crate your own logging abstractions.
+///
+/// # Example
+///
+/// ```
+/// use loggery::{Level, log};
+///
+/// let level = if cfg!(debug_assertion) {
+///     Level::Debug
+/// } else {
+///     Level::Info
+/// };
+///
+/// log!(level, "This is a log with dynamically set level")
+/// ```
+#[macro_export]
+macro_rules! log {
+    ($level:expr, $($arg:tt)*) => {
+        $crate::log($crate::Payload {
+            level: $level,
+            args: format_args!($($arg)*),
+            meta: $crate::Metadata {
+                module_path: module_path!(),
+                file: file!(),
+                line: line!(),
+            },
+        })
+    };
+}
+
 /// Logs a message at the `trace` level.
 ///
 /// # Example
@@ -377,10 +418,7 @@ fn std_logger_fn(payload: Payload) {
 #[macro_export]
 macro_rules! trace {
     ($($arg:tt)*) => {
-        $crate::log($crate::Payload {
-            level: $crate::Level::Trace,
-            args: format_args!($($arg)*)
-        })
+        $crate::log!($crate::Level::Trace, $($arg)*);
     };
 }
 
@@ -402,10 +440,7 @@ macro_rules! trace {
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
-        $crate::log($crate::Payload {
-            level: $crate::Level::Debug,
-            args: format_args!($($arg)*)
-        })
+        $crate::log!($crate::Level::Debug, $($arg)*);
     };
 }
 
@@ -427,10 +462,7 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
-        $crate::log($crate::Payload {
-            level: $crate::Level::Info,
-            args: format_args!($($arg)*)
-        })
+        $crate::log!($crate::Level::Info, $($arg)*);
     };
 }
 
@@ -450,10 +482,7 @@ macro_rules! info {
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
-        $crate::log($crate::Payload {
-            level: $crate::Level::Warn,
-            args: format_args!($($arg)*)
-        })
+        $crate::log!($crate::Level::Warn, $($arg)*);
     };
 }
 
@@ -473,10 +502,7 @@ macro_rules! warn {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
-        $crate::log($crate::Payload {
-            level: $crate::Level::Error,
-            args: format_args!($($arg)*)
-        })
+        $crate::log!($crate::Level::Error, $($arg)*);
     };
 }
 
