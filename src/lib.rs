@@ -69,6 +69,7 @@
 //! > **Default features:** `std`, `runtime_level`
 //! - `std`: Enables default stdout logger
 //! - `static`: Enables static extern logger definition
+//! - `metadata`: Enables `meta` field in the [`Payload`]
 //! - `runtime_level`: Allows changing log level filtering at runtime
 //! - `min_level_*`: Compile-time log level filtering
 //!     - `min_level_off`: Disables all the logs
@@ -121,6 +122,7 @@ impl Level {
     }
 }
 
+#[cfg(feature = "metadata")]
 pub struct Metadata {
     pub module_path: &'static str,
     pub file: &'static str,
@@ -130,6 +132,7 @@ pub struct Metadata {
 pub struct Payload<'a> {
     pub level: Level,
     pub args: core::fmt::Arguments<'a>,
+    #[cfg(feature = "metadata")]
     pub meta: Metadata,
 }
 
@@ -362,10 +365,39 @@ fn get_logger() -> Option<LoggerFn> {
     Some(ptr_to_logger_fn(ptr))
 }
 
-/// Default stdout logger (`std` feature).
-#[cfg(all(feature = "std", not(feature = "static")))]
-fn std_logger_fn(payload: Payload) {
-    std::println!("[{}] {}", payload.level.as_str(), payload.args)
+/// Logs a message at the specified level.
+///
+/// This is the underlying macro used by [`trace!`], [`debug!`], [`info!`], [`warn!`] and [`error!`].
+/// While you mostly use those level-specific macros, `log!` can be useful when you want to specify
+/// the log level dynamically or crate your own logging abstractions.
+///
+/// # Example
+///
+/// ```
+/// use loggery::{Level, log};
+///
+/// let level = if cfg!(debug_assertions) {
+///     Level::Debug
+/// } else {
+///     Level::Info
+/// };
+///
+/// log!(level, "This is a log with dynamically set level")
+/// ```
+#[cfg(feature = "metadata")]
+#[macro_export]
+macro_rules! log {
+    ($level:expr, $($arg:tt)*) => {
+        $crate::log($crate::Payload {
+            level: $level,
+            args: format_args!($($arg)*),
+            meta: $crate::Metadata {
+                module_path: module_path!(),
+                file: file!(),
+                line: line!(),
+            },
+        })
+    };
 }
 
 /// Logs a message at the specified level.
@@ -379,7 +411,7 @@ fn std_logger_fn(payload: Payload) {
 /// ```
 /// use loggery::{Level, log};
 ///
-/// let level = if cfg!(debug_assertion) {
+/// let level = if cfg!(debug_assertions) {
 ///     Level::Debug
 /// } else {
 ///     Level::Info
@@ -387,17 +419,13 @@ fn std_logger_fn(payload: Payload) {
 ///
 /// log!(level, "This is a log with dynamically set level")
 /// ```
+#[cfg(not(feature = "metadata"))]
 #[macro_export]
 macro_rules! log {
     ($level:expr, $($arg:tt)*) => {
         $crate::log($crate::Payload {
             level: $level,
             args: format_args!($($arg)*),
-            meta: $crate::Metadata {
-                module_path: module_path!(),
-                file: file!(),
-                line: line!(),
-            },
         })
     };
 }
@@ -506,13 +534,20 @@ macro_rules! error {
     };
 }
 
+/// Default stdout logger (`std` feature).
+#[cfg(feature = "std")]
+#[inline(always)]
+fn std_logger_fn(payload: Payload) {
+    std::println!("[{}] {}", payload.level.as_str(), payload.args)
+}
+
 #[cfg(all(feature = "std", feature = "static"))]
-mod std_static {
+mod stdout {
     use crate::Payload;
 
     /// Default logger implementation for when the `std` and `static` features are enabled.
     #[no_mangle]
     pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
-        std::println!("[{}] {}", payload.level.as_str(), payload.args)
+        super::std_logger_fn(payload);
     }
 }
