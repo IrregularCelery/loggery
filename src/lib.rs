@@ -332,35 +332,29 @@ fn ptr_to_logger_fn(ptr: *mut ()) -> LoggerFn {
 }
 
 /// Gets the logger, auto-initializing a default stdout logger if needed (`std` feature).
-#[cfg(all(feature = "std", not(feature = "static")))]
+/// Returns `None` if not set and `std` feature isn't enabled.
+#[cfg(not(feature = "static"))]
 #[inline(always)]
 fn get_logger() -> Option<LoggerFn> {
     let ptr = LOGGER_FN.load(core::sync::atomic::Ordering::Acquire);
 
     if ptr.is_null() {
-        let _ = LOGGER_FN.compare_exchange(
-            core::ptr::null_mut(),
-            stdout::logger_fn as usize as *mut (),
-            core::sync::atomic::Ordering::AcqRel,
-            core::sync::atomic::Ordering::Acquire,
-        );
+        #[cfg(feature = "std")]
+        {
+            let _ = LOGGER_FN.compare_exchange(
+                core::ptr::null_mut(),
+                stdout::logger_fn as usize as *mut (),
+                core::sync::atomic::Ordering::AcqRel,
+                core::sync::atomic::Ordering::Acquire,
+            );
 
-        // Reload after initialization
-        let new_ptr = LOGGER_FN.load(core::sync::atomic::Ordering::Acquire);
+            // Reload after initialization
+            let new_ptr = LOGGER_FN.load(core::sync::atomic::Ordering::Acquire);
 
-        return Some(ptr_to_logger_fn(new_ptr));
-    }
+            return Some(ptr_to_logger_fn(new_ptr));
+        }
 
-    Some(ptr_to_logger_fn(ptr))
-}
-
-/// Gets the logger, Returns `None` if not set (no_std).
-#[cfg(all(not(feature = "std"), not(feature = "static")))]
-#[inline(always)]
-fn get_logger() -> Option<LoggerFn> {
-    let ptr = LOGGER_FN.load(core::sync::atomic::Ordering::Acquire);
-
-    if ptr.is_null() {
+        #[cfg(not(feature = "std"))]
         return None;
     }
 
