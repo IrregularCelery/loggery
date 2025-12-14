@@ -82,9 +82,6 @@
 
 #![no_std]
 
-#[cfg(feature = "std")]
-extern crate std;
-
 /// Log levels in order of incraesing severity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
@@ -343,7 +340,7 @@ fn get_logger() -> Option<LoggerFn> {
     if ptr.is_null() {
         let _ = LOGGER_FN.compare_exchange(
             core::ptr::null_mut(),
-            std_logger_fn as usize as *mut (),
+            stdout::logger_fn as usize as *mut (),
             core::sync::atomic::Ordering::AcqRel,
             core::sync::atomic::Ordering::Acquire,
         );
@@ -544,20 +541,22 @@ macro_rules! error {
     };
 }
 
-/// Default stdout logger (`std` feature).
 #[cfg(feature = "std")]
-#[inline(always)]
-fn std_logger_fn(payload: Payload) {
-    std::println!("[{}] {}", payload.level.as_str(), payload.args)
-}
-
-#[cfg(all(feature = "std", feature = "static"))]
 mod stdout {
+    extern crate std;
+
     use crate::Payload;
 
+    /// Default stdout logger (`std` feature).
+    #[inline(always)]
+    pub(super) fn logger_fn(payload: Payload) {
+        std::println!("[{}] {}", payload.level.as_str(), payload.args)
+    }
+
     /// Default logger implementation for when the `std` and `static` features are enabled.
+    #[cfg(feature = "static")]
     #[no_mangle]
     pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
-        super::std_logger_fn(payload);
+        logger_fn(payload);
     }
 }
