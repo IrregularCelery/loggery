@@ -12,6 +12,7 @@ default = ["std", "metadata", "runtime_level"]
 std = []
 static = []
 metadata = []
+extension = []
 runtime_level = []
 
 # Logging levels (logs below a certain level are ignored)

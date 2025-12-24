@@ -4,6 +4,7 @@
 //! # Usage
 //!
 //! Add `loggery` to your `Cargo.toml`:
+//!
 //! ```toml
 //! [dependencies]
 //! loggery = "0.1.0"
@@ -62,15 +63,17 @@
 //!     debug!("Direct call from custom static implementation!")
 //! }
 //! ```
+//!
 //! **Note:** Even with `static` feature, you can still use the `runtime_level` feature and
 //! therefore the [`set_min_level`] function to do runtime log level filtering.
 //!
 //! # Features
 //!
-//! > **Default features:** `std`, `runtime_level`
+//! > **Default features:** `std`, `metadata`, `runtime_level`
 //! - `std`: Enables default stdout logger
 //! - `static`: Enables static extern logger definition
 //! - `metadata`: Enables `meta` field in the [`Payload`]
+//! - `extension`: Enables extension function for additional functionality
 //! - `runtime_level`: Allows changing log level filtering at runtime
 //! - `min_level_*`: Compile-time log level filtering
 //!     - `min_level_off`: Disables all the logs
@@ -137,6 +140,10 @@ pub struct Payload<'a> {
 /// Function type for custom logger implementation.
 pub type LoggerFn = fn(Payload);
 
+/// Function type for custom extension implementation.
+#[cfg(feature = "extension")]
+pub type ExtensionFn = fn(&Payload);
+
 /// Compile-time minimum log level set by `min_level_*` feature flags.
 ///
 /// If no specific level is set, all logs are enabled by default (`min_level_trace`).
@@ -152,11 +159,12 @@ const COMPILE_TIME_MIN_LEVEL: Option<u8> = match () {
 
 #[cfg(feature = "static")]
 extern "Rust" {
-    /// External logger implementation that must be provided when using the `static` feature.
+    /// External logger implementation that *MUST* be provided when using the `static` feature.
     ///
     /// # Safety
     ///
     /// When the `static` feature is enabled, you must define this function in your binary crate:
+    ///
     /// ```
     /// #[no_mangle]
     /// pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
@@ -164,13 +172,37 @@ extern "Rust" {
     /// }
     /// ```
     ///
-    /// Not providing this function will result in a linker error!
+    /// **Warning:** Not providing this function will result in a linker error!
     fn __loggery_log_impl(payload: Payload);
+
+    /// External extension implementation that *CAN* be provided when using the `external` and
+    /// `static` features.
+    ///
+    /// # Safety
+    ///
+    /// When the `external` and `static` features are enabled, you can define this function in
+    /// your binary crate:
+    ///
+    /// ```
+    /// #[no_mangle]
+    /// pub extern "Rust" fn __loggery_extension_impl(payload: &Payload) {
+    ///     // Your custom implementation
+    /// }
+    /// ```
+    ///
+    /// **Note:** Not providing this function is fine since a NOP version is implementated
+    /// by default.
+    #[cfg(feature = "extension")]
+    fn __loggery_extension_impl(payload: &Payload);
 }
 
 /// Global logger function pointer storage. (NOT `static` feature)
 #[cfg(not(feature = "static"))]
 static LOGGER_FN: core::sync::atomic::AtomicPtr<()> =
+    core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
+/// Global extension function pointer storage. (`extension` feature, NOT `static` feature)
+#[cfg(all(feature = "extension", not(feature = "static")))]
+static EXTENSION_FN: core::sync::atomic::AtomicPtr<()> =
     core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
 /// Runtime minimum log level storage. (`runtime_level` feature)
 #[cfg(feature = "runtime_level")]
@@ -202,6 +234,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 ///
 /// When the `static` feature is enabled, this function isn't available. Instead, you must define
 /// this function in your binary crate:
+///
 /// ```
 /// use loggery::Payload;
 ///
@@ -210,12 +243,61 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 ///     // Your custom implementation
 /// }
 /// ```
+///
 /// When the `std` feature is enabled, a default logger is automatically initialized if no logger
 /// has been set. This function can still be used to override that default.
 #[cfg(not(feature = "static"))]
 #[inline(always)]
 pub fn set_logger(logger_fn: LoggerFn) {
     LOGGER_FN.store(logger_fn as *mut (), core::sync::atomic::Ordering::Release)
+}
+
+/// Sets the global extension function. (`extension` feature, NOT `static` feature)
+///
+/// Extensions are called before the logger and receive a reference to the [`Payload`], giving us
+/// the ability to do additional functionalities like saving logs to file, etc.
+///
+/// It's recommended to call once during the initialization.
+///
+/// # Example
+///
+/// ```no_run
+/// use loggery::{Payload, debug};
+///
+/// fn my_extension(payload: &Payload) {
+///     // Your custom implementation
+///
+///     // For example, you can use the provided extension `save_to_file`
+///     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
+/// }
+///
+/// fn main () {
+///     loggery::set_extension(my_extension);
+///
+///     debug!("A log message that will be saved to a file too!");
+/// }
+/// ```
+///
+/// # Note
+///
+/// When the `static` feature is enabled, this function isn't available. Instead, you must define
+/// this function in your binary crate:
+///
+/// ```
+/// use loggery::Payload;
+///
+/// #[no_mangle]
+/// pub extern "Rust" fn __loggery_extension_impl(payload: &Payload) {
+///     // Your custom implementation
+/// }
+/// ```
+#[cfg(all(feature = "extension", not(feature = "static")))]
+#[inline(always)]
+pub fn set_extension(extension_fn: ExtensionFn) {
+    EXTENSION_FN.store(
+        extension_fn as *mut (),
+        core::sync::atomic::Ordering::Release,
+    )
 }
 
 /// Set the runtime minimum log level. (`runtime_level` feature)
@@ -236,6 +318,7 @@ pub fn set_logger(logger_fn: LoggerFn) {
 /// debug!("This will NOT be logged");
 /// warn!("This will be logged");
 /// ```
+///
 /// If the `runtime_level` feature *isn't* enabled, you can use the `min_level_*` features for
 /// compile-time level filtering.
 #[cfg(feature = "runtime_level")]
@@ -298,6 +381,18 @@ pub fn log(payload: Payload) {
         }
     }
 
+    #[cfg(all(feature = "extension", feature = "static"))]
+    {
+        unsafe { __loggery_extension_impl(&payload) };
+    }
+
+    #[cfg(all(feature = "extension", not(feature = "static")))]
+    {
+        if let Some(extension_fn) = get_extension() {
+            extension_fn(&payload)
+        }
+    }
+
     #[cfg(feature = "static")]
     {
         unsafe { __loggery_log_impl(payload) };
@@ -328,6 +423,23 @@ fn ptr_to_logger_fn(ptr: *mut ()) -> LoggerFn {
     unsafe { core::mem::transmute::<*mut (), LoggerFn>(ptr) }
 }
 
+/// Converts a raw pointer back to an `ExtensionFn`.
+///
+/// # Safety
+///
+/// Safe only when `ptr` was created by casting a valid `ExtensionFn` to `*mut ()`.
+/// The caller must ensure:
+/// - Pointer originated from a valid function pointer cast
+/// - Fnuction pointer has 'static lifetime (guaranteed for all fn pointers)
+/// - Proper synchronization (handled by atomic ops)
+#[cfg(all(feature = "extension", not(feature = "static")))]
+#[inline(always)]
+fn ptr_to_extension_fn(ptr: *mut ()) -> ExtensionFn {
+    // SAFETY: `ptr` was created from `ExtensionFn` in `set_extension`.
+    // Function pointers are 'static. Atomics ensure cross-thread visibility.
+    unsafe { core::mem::transmute::<*mut (), ExtensionFn>(ptr) }
+}
+
 /// Gets the logger, auto-initializing a default stdout logger if needed (`std` feature).
 /// Returns `None` if not set and `std` feature isn't enabled.
 #[cfg(not(feature = "static"))]
@@ -356,6 +468,19 @@ fn get_logger() -> Option<LoggerFn> {
     }
 
     Some(ptr_to_logger_fn(ptr))
+}
+
+/// Gets the extension function if one is set, otherwise returns None.
+#[cfg(all(feature = "extension", not(feature = "static")))]
+#[inline(always)]
+fn get_extension() -> Option<ExtensionFn> {
+    let ptr = EXTENSION_FN.load(core::sync::atomic::Ordering::Acquire);
+
+    if ptr.is_null() {
+        return None;
+    }
+
+    Some(ptr_to_extension_fn(ptr))
 }
 
 /// Logs a message at the specified level.
@@ -532,6 +657,73 @@ macro_rules! error {
     };
 }
 
+/// Built-in extensions utilities for common logging tasks.
+///
+/// These functions are desigend to be called from within your custom extension function.
+/// They must not be passed directly to the [`set_extension`] because they might need parameters.
+///
+/// # Example
+///
+/// ```no_run
+/// use loggery::{Payload, debug};
+///
+/// fn my_extension(payload: &Payload) {
+///     // Your custom implementation
+///
+///     // For example, you can use the provided extension `save_to_file`
+///     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
+/// }
+///
+/// fn main () {
+///     loggery::set_extension(my_extension);
+///
+///     debug!("A log message that will be saved to a file too!");
+/// }
+/// ```
+#[cfg(feature = "extension")]
+pub mod extensions {
+    use crate::Payload;
+
+    #[cfg(feature = "std")]
+    extern crate std;
+
+    /// Appends a log entry to a file (`std` feature)
+    ///
+    /// The file at the `path` is opened in append mode.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use loggery::{Payload, debug};
+    ///
+    /// fn my_extension(payload: &Payload) {
+    ///     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
+    /// }
+    ///
+    /// fn main () {
+    ///     loggery::set_extension(my_extension);
+    ///
+    ///     debug!("A log message that will be saved to a file too!");
+    /// }
+    /// ```
+    ///
+    /// # Format
+    ///
+    /// Logs are written in the format: `[LEVEL] message`
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn save_to_file(payload: &Payload, path: &str) -> std::io::Result<()> {
+        use std::io::Write as _;
+
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
+
+        writeln!(file, "[{}] {}", payload.level.as_str(), payload.args)
+    }
+}
+
 #[cfg(feature = "std")]
 mod stdout {
     extern crate std;
@@ -547,11 +739,25 @@ mod stdout {
         let mut handle = stdout.lock();
         let _ = writeln!(handle, "[{}] {}", payload.level.as_str(), payload.args);
     }
+}
+
+/// This module is included if the `static` feature is enabled to provide the default function
+/// implementations.
+#[cfg(feature = "static")]
+mod static_impl {
+    use crate::Payload;
+
+    /// Default extension implementation for when the `extension` and `static` features are enabled.
+    #[cfg(feature = "extension")]
+    #[no_mangle]
+    pub extern "Rust" fn __loggery_extension_impl(_payload: &Payload) {
+        // NOP
+    }
 
     /// Default logger implementation for when the `std` and `static` features are enabled.
-    #[cfg(feature = "static")]
+    #[cfg(feature = "std")]
     #[no_mangle]
     pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
-        logger_fn(payload);
+        crate::stdout::logger_fn(payload);
     }
 }
