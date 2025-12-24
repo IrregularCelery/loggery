@@ -34,7 +34,7 @@
 //!     // Your custom implementation
 //! }
 //!
-//! fn main () {
+//! fn main() {
 //!     loggery::set_logger(my_logger);
 //!     loggery::set_min_level(Level::Trace);
 //!
@@ -91,7 +91,7 @@
 //!     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
 //! }
 //!
-//! fn main () {
+//! fn main() {
 //! #   #[cfg(feature = "extension")]
 //!     loggery::set_extension(my_extension);
 //!
@@ -114,18 +114,20 @@
 //! # Features
 //!
 //! > **Default features:** `std`, `metadata`, `runtime_level`
-//! - `std`: Enables default stdout logger
-//! - `static`: Enables static extern logger definition
-//! - `metadata`: Enables `meta` field in the [`Payload`]
-//! - `extension`: Enables extension function for additional functionality
-//! - `runtime_level`: Allows changing log level filtering at runtime
-//! - `min_level_*`: Compile-time log level filtering
-//!     - `min_level_off`: Disables all the logs
-//!     - `min_level_trace`: Enables log levels ([`trace`], [`debug`], [`info`], [`warn`], [`error`])
-//!     - `min_level_debug`: Enables log levels ([`debug`], [`info`], [`warn`], [`error`])
-//!     - `min_level_info`:  Enables log levels ([`info`], [`warn`], [`error`])
-//!     - `min_level_warn`:  Enables log levels ([`warn`], [`error`])
-//!     - `min_level_error`: Enables log levels ([`error`])
+//!
+//! |      Feature      | Default |                          Description                          |
+//! |-------------------|:-------:|---------------------------------------------------------------|
+//! | `std`             |  __✓__  | Enables default stdout logger                                 |
+//! | `static`          |  __✗__  | Enables static extern logger definition                       |
+//! | `metadata`        |  __✓__  | Enables [`meta`](Metadata) field in the [`Payload`]           |
+//! | `extension`       |  __✗__  | Enables extension hooks for extra functionality               |
+//! | `runtime_level`   |  __✓__  | Allows changing log level filtering at runtime                |
+//! | `min_level_off`   |  __✗__  | Disables all logs at compile time                             |
+//! | `min_level_trace` |  __✗__  | Only logs [`trace`], [`debug`], [`info`], [`warn`], [`error`] |
+//! | `min_level_debug` |  __✗__  | Only logs [`debug`], [`info`], [`warn`], [`error`]            |
+//! | `min_level_info`  |  __✗__  | Only logs [`info`], [`warn`], [`error`]                       |
+//! | `min_level_warn`  |  __✗__  | Only logs [`warn`], [`error`]                                 |
+//! | `min_level_error` |  __✗__  | Only logs [`error`]                                           |
 
 #![no_std]
 
@@ -279,7 +281,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 ///     // Your custom implementation
 /// }
 ///
-/// fn main () {
+/// fn main() {
 ///     loggery::set_logger(my_logger);
 ///     loggery::set_min_level(Level::Trace);
 ///
@@ -328,7 +330,7 @@ pub fn set_logger(logger_fn: LoggerFn) {
 ///     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
 /// }
 ///
-/// fn main () {
+/// fn main() {
 ///     loggery::set_extension(my_extension);
 ///
 ///     debug!("A log message that will be saved to a file too!");
@@ -731,7 +733,7 @@ macro_rules! error {
 ///     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
 /// }
 ///
-/// fn main () {
+/// fn main() {
 ///     loggery::set_extension(my_extension);
 ///
 ///     debug!("A log message that will be saved to a file too!");
@@ -757,7 +759,7 @@ pub mod extensions {
     ///     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
     /// }
     ///
-    /// fn main () {
+    /// fn main() {
     ///     loggery::set_extension(my_extension);
     ///
     ///     debug!("A log message that will be saved to a file too!");
