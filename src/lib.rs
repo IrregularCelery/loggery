@@ -255,7 +255,7 @@ pub fn set_logger(logger_fn: LoggerFn) {
 /// Sets the global extension function. (`extension` feature, NOT `static` feature)
 ///
 /// Extensions are called before the logger and receive a reference to the [`Payload`], giving us
-/// the ability to do additional functionalities like saving logs to file, etc.
+/// the ability to do additional functionality like saving logs to file, etc.
 ///
 /// It's recommended to call once during the initialization.
 ///
