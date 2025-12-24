@@ -24,6 +24,9 @@
 //!
 //! # Custom Logger
 //!
+//! > **Note:** [`set_logger`] isn't available if the `static` feature is enabled!
+//! > Check [Static](#static) instead.
+//!
 //! ```
 //! use loggery::{Payload, Level, debug};
 //!
@@ -39,7 +42,9 @@
 //! }
 //! ```
 //!
-//! # Static Logger
+//! # Static
+//!
+//! > **Note:** Only available when the `static` feature is enabled.
 //!
 //! For maximum performance in embedded or performance-critical applications, use the `static`
 //! feature to remove the runtime indirection. Your logger is linked directly at compile time:
@@ -51,7 +56,7 @@
 //!
 //! Then define your logger implementation in your binary crate:
 //!
-//! ```
+//! ```no_run
 //! use loggery::{Payload, debug};
 //!
 //! #[no_mangle]
@@ -64,8 +69,47 @@
 //! }
 //! ```
 //!
-//! **Note:** Even with `static` feature, you can still use the `runtime_level` feature and
-//! therefore the [`set_min_level`] function to do runtime log level filtering.
+//! > **Note:** Even with `static` feature, you can still use the `runtime_level` feature and
+//! > therefore the [`set_min_level`] function to do runtime log level filtering.
+//!
+//! # Extensions
+//!
+//! > **Note:** Only available when the `extension` feature is enabled.
+//!
+//! Extensions provide a hook for extra processing *alongside* the actual logger. They're called
+//! before the logger and receive a reference to the [`Payload`], giving us the ability to do
+//! additional functionality like saving logs to file.
+//!
+//! ```
+//! use loggery::{Payload, debug};
+//!
+//! fn my_extension(payload: &Payload) {
+//!     // Your custom implementation
+//!
+//!     // For example, you can use the provided extension `save_to_file`
+//! #   #[cfg(feature = "extension")]
+//!     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
+//! }
+//!
+//! fn main () {
+//! #   #[cfg(feature = "extension")]
+//!     loggery::set_extension(my_extension);
+//!
+//!     debug!("A log message that will be saved to a file too!");
+//! }
+//! ```
+//!
+//! > **Note:** When the `static` feature is enabled, `set_extension` isn't available. Instead,
+//! > you can do this:
+//!
+//! ```no_run
+//! use loggery::Payload;
+//!
+//! #[no_mangle]
+//! pub extern "Rust" fn __loggery_extension_impl(payload: &Payload) {
+//!     // Your custom implementation
+//! }
+//! ```
 //!
 //! # Features
 //!
@@ -89,10 +133,15 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Level {
+    /// Trace
     Trace = 0,
+    /// Debug
     Debug = 1,
+    /// Info
     Info = 2,
+    /// Warn
     Warn = 3,
+    /// Error
     Error = 4,
 }
 
@@ -124,16 +173,24 @@ impl Level {
 }
 
 #[cfg(feature = "metadata")]
+/// Extra context and information for a log.
 pub struct Metadata {
+    /// The module path where the log was generated.
     pub module_path: &'static str,
+    /// The source file containing the log call.
     pub file: &'static str,
+    /// The line number of the log call.
     pub line: u32,
 }
 
+/// The data passed to the logger and extensions.
 pub struct Payload<'a> {
+    /// The severity level of the log.
     pub level: Level,
+    /// The formatted message arguments.
     pub args: core::fmt::Arguments<'a>,
     #[cfg(feature = "metadata")]
+    /// Additional context and metadata (requires `metadata` feature).
     pub meta: Metadata,
 }
 
@@ -165,7 +222,7 @@ extern "Rust" {
     ///
     /// When the `static` feature is enabled, you must define this function in your binary crate:
     ///
-    /// ```
+    /// ```no_run
     /// #[no_mangle]
     /// pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
     ///     // Your custom implementation
@@ -183,7 +240,7 @@ extern "Rust" {
     /// When the `external` and `static` features are enabled, you can define this function in
     /// your binary crate:
     ///
-    /// ```
+    /// ```no_run
     /// #[no_mangle]
     /// pub extern "Rust" fn __loggery_extension_impl(payload: &Payload) {
     ///     // Your custom implementation
@@ -235,7 +292,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// When the `static` feature is enabled, this function isn't available. Instead, you must define
 /// this function in your binary crate:
 ///
-/// ```
+/// ```no_run
 /// use loggery::Payload;
 ///
 /// #[no_mangle]
@@ -255,7 +312,7 @@ pub fn set_logger(logger_fn: LoggerFn) {
 /// Sets the global extension function. (`extension` feature, NOT `static` feature)
 ///
 /// Extensions are called before the logger and receive a reference to the [`Payload`], giving us
-/// the ability to do additional functionality like saving logs to file, etc.
+/// the ability to do additional functionality like saving logs to file.
 ///
 /// It's recommended to call once during the initialization.
 ///
@@ -283,7 +340,7 @@ pub fn set_logger(logger_fn: LoggerFn) {
 /// When the `static` feature is enabled, this function isn't available. Instead, you must define
 /// this function in your binary crate:
 ///
-/// ```
+/// ```no_run
 /// use loggery::Payload;
 ///
 /// #[no_mangle]
