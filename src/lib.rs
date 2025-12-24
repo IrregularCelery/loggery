@@ -26,12 +26,12 @@
 //! ```
 //! use loggery::{Payload, Level, debug};
 //!
-//! fn my_custom_logger(payload: Payload) {
+//! fn my_logger(payload: Payload) {
 //!     // Your custom implementation
 //! }
 //!
 //! fn main () {
-//!     loggery::set_logger(my_custom_logger);
+//!     loggery::set_logger(my_logger);
 //!     loggery::set_min_level(Level::Trace);
 //!
 //!     debug!("A log message using my custom logger!");
@@ -186,12 +186,12 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// ```
 /// use loggery::{Payload, Level, debug};
 ///
-/// fn my_custom_logger(payload: Payload) {
+/// fn my_logger(payload: Payload) {
 ///     // Your custom implementation
 /// }
 ///
 /// fn main () {
-///     loggery::set_logger(my_custom_logger);
+///     loggery::set_logger(my_logger);
 ///     loggery::set_min_level(Level::Trace);
 ///
 ///     debug!("A log message using my custom logger!");
