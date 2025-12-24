@@ -72,13 +72,23 @@
 //! > **Note:** Even with `static` feature, you can still use the `runtime_level` feature and
 //! > therefore the [`set_min_level`] function to do runtime log level filtering.
 //!
+//! <div class="warning">
+//!
+//! When using the `static` feature, you **must** provide the `__loggery_log_impl` function
+//! in your binary crate, or you'll get a linker error!
+//!
+//! </div>
+//!
 //! # Extensions
 //!
 //! > **Note:** Only available when the `extension` feature is enabled.
 //!
 //! Extensions provide a hook for extra processing *alongside* the actual logger. They're called
-//! before the logger and receive a reference to the [`Payload`], giving us the ability to do
-//! additional functionality like saving logs to file.
+//! before the logger and receive a reference to the [`Payload`], giving you the ability to:
+//! - Save logs to files
+//! - Send logs to external services
+//! - Collect metrics
+//! - etc.
 //!
 //! ```
 //! use loggery::{Payload, debug};
