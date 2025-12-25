@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust:
+          - 1.56.0 # MSRV
+          - stable
+          - beta
+          - nightly
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests (std only)
+        run: cargo test --no-default-features --features std
+
+      - name: Run tests (std + static)
+        run: cargo test --no-default-features --features std,static
+
+      - name: Run tests (std + static + extension)
+        run: cargo test --no-default-features --features std,static,extension
+
+      - name: Run tests (all features)
+        run: cargo test --all-features
+
+  features:
+    name: Features
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build features (no features)
+        run: cargo build --no-default-features
+
+      - name: Build features (std only)
+        run: cargo build --no-default-features --features std
+
+      - name: Build features (std + static)
+        run: cargo build --no-default-features --features std,static
+
+      - name: Build features (std + static + runtime_level)
+        run: cargo build --no-default-features --features std,static,runtime_level
+
+      - name: Build features (std + static + extension + runtime_level)
+        run: cargo build --no-default-features --features std,static,extension,runtime_level
+
+      - name: Build features (std + static + metadata + extension + runtime_level)
+        run: cargo build --no-default-features --features std,static,metadata,extension,runtime_level
+
+  no-std:
+    name: No-std
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build (no-std)
+        run: cargo build --no-default-features
+
+  embedded:
+    name: Embedded
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: rustup target add thumbv6m-none-eabi riscv32imc-unknown-none-elf
+
+      - name: Build for embedded (thumbv6m-none-eabi)
+        run: cargo build --target=thumbv6m-none-eabi --no-default-features
+
+      - name: Build for embedded (riscv32imc-unknown-none-elf)
+        run: cargo build --target=riscv32imc-unknown-none-elf --no-default-features
+
+  lints:
+    name: Lints (Fmt/Clippy/Docs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check fmt
+        run: cargo fmt --all -- --check
+
+      - name: Check clippy
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Check doc
+        run: cargo doc --features std,metadata,extension,runtime_level
