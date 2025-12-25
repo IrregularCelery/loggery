@@ -28,19 +28,38 @@
 //! > Check [Static](#static) instead.
 //!
 //! ```
-//! use loggery::{Payload, Level, debug};
+//! use loggery::{Payload, debug};
 //!
 //! fn my_logger(payload: Payload) {
 //!     // Your custom implementation
 //! }
 //!
 //! fn main() {
+//! #   #[cfg(not(feature = "static"))]
 //!     loggery::set_logger(my_logger);
-//!     loggery::set_min_level(Level::Trace);
 //!
 //!     debug!("A log message using my custom logger!");
 //! }
 //! ```
+//!
+//! # Runtime Level
+//!
+//! > **Note:** Only available when the `runtime_level` feature is enabled (enabled by default).
+//!
+//! You can dynamically change the minimum log level at runtime using [`set_min_level`]:
+//!
+//! ```
+//! use loggery::{Level, debug, warn};
+//!
+//! # #[cfg(feature = "runtime_level")]
+//! loggery::set_min_level(Level::Warn);
+//!
+//! debug!("This will NOT be logged");
+//! warn!("This will be logged");
+//! ```
+//!
+//! This works alongside compile-time filtering from `min_level_*` features.
+//! Runtime filtering can only be more restrictive, not less restrictive than compile-time feature.
 //!
 //! # Static
 //!
@@ -97,12 +116,12 @@
 //!     // Your custom implementation
 //!
 //!     // For example, you can use the provided extension `save_to_file`
-//! #   #[cfg(feature = "extension")]
+//! #   #[cfg(all(feature = "extension", not(feature = "static")))]
 //!     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
 //! }
 //!
 //! fn main() {
-//! #   #[cfg(feature = "extension")]
+//! #   #[cfg(all(feature = "extension", not(feature = "static")))]
 //!     loggery::set_extension(my_extension);
 //!
 //!     debug!("A log message that will be saved to a file too!");
@@ -218,11 +237,11 @@ pub type ExtensionFn = fn(&Payload);
 /// If no specific level is set, all logs are enabled by default (`min_level_trace`).
 const COMPILE_TIME_MIN_LEVEL: Option<u8> = match () {
     _ if cfg!(feature = "min_level_off") => None,
-    _ if cfg!(feature = "min_level_trace") => Some(Level::Trace as u8),
-    _ if cfg!(feature = "min_level_debug") => Some(Level::Debug as u8),
-    _ if cfg!(feature = "min_level_info") => Some(Level::Info as u8),
-    _ if cfg!(feature = "min_level_warn") => Some(Level::Warn as u8),
     _ if cfg!(feature = "min_level_error") => Some(Level::Error as u8),
+    _ if cfg!(feature = "min_level_warn") => Some(Level::Warn as u8),
+    _ if cfg!(feature = "min_level_info") => Some(Level::Info as u8),
+    _ if cfg!(feature = "min_level_debug") => Some(Level::Debug as u8),
+    _ if cfg!(feature = "min_level_trace") => Some(Level::Trace as u8),
     _ => Some(Level::Trace as u8), // By default, allow all logs
 };
 
@@ -235,6 +254,8 @@ extern "Rust" {
     /// When the `static` feature is enabled, you must define this function in your binary crate:
     ///
     /// ```no_run
+    /// use loggery::Payload;
+    ///
     /// #[no_mangle]
     /// pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
     ///     // Your custom implementation
@@ -253,6 +274,8 @@ extern "Rust" {
     /// your binary crate:
     ///
     /// ```no_run
+    /// use loggery::Payload;
+    ///
     /// #[no_mangle]
     /// pub extern "Rust" fn __loggery_extension_impl(payload: &Payload) {
     ///     // Your custom implementation
@@ -285,7 +308,7 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 /// # Example
 ///
 /// ```
-/// use loggery::{Payload, Level, debug};
+/// use loggery::{Payload, debug};
 ///
 /// fn my_logger(payload: Payload) {
 ///     // Your custom implementation
@@ -293,7 +316,6 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 ///
 /// fn main() {
 ///     loggery::set_logger(my_logger);
-///     loggery::set_min_level(Level::Trace);
 ///
 ///     debug!("A log message using my custom logger!");
 /// }
@@ -369,7 +391,10 @@ pub fn set_extension(extension_fn: ExtensionFn) {
     )
 }
 
-/// Set the runtime minimum log level. (`runtime_level` feature)
+/// Sets the runtime minimum log level. (`runtime_level` feature)
+///
+/// > You can also use the `min_level_*` features for compile-time level filtering.
+/// > (e.g. `min_level_warn` will disable all the log levels below [`warn!`] at compile-time.)
 ///
 /// # Note
 ///
@@ -387,9 +412,6 @@ pub fn set_extension(extension_fn: ExtensionFn) {
 /// debug!("This will NOT be logged");
 /// warn!("This will be logged");
 /// ```
-///
-/// If the `runtime_level` feature *isn't* enabled, you can use the `min_level_*` features for
-/// compile-time level filtering.
 #[cfg(feature = "runtime_level")]
 #[inline(always)]
 pub fn set_min_level(level: Level) {
@@ -403,8 +425,10 @@ pub fn set_min_level(level: Level) {
 /// ```
 /// use loggery::Level;
 ///
+/// # #[cfg(feature = "runtime_level")]
 /// loggery::set_min_level(Level::Debug);
 ///
+/// # #[cfg(all(feature = "runtime_level", not(feature = "min_level_off")))]
 /// assert_eq!(loggery::get_min_level(), Some(Level::Debug));
 /// ```
 #[inline(always)]
@@ -740,10 +764,12 @@ macro_rules! error {
 ///     // Your custom implementation
 ///
 ///     // For example, you can use the provided extension `save_to_file`
+/// #   #[cfg(all(feature = "extension", not(feature = "static")))]
 ///     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
 /// }
 ///
 /// fn main() {
+/// #   #[cfg(all(feature = "extension", not(feature = "static")))]
 ///     loggery::set_extension(my_extension);
 ///
 ///     debug!("A log message that will be saved to a file too!");
@@ -766,10 +792,12 @@ pub mod extensions {
     /// use loggery::{Payload, debug};
     ///
     /// fn my_extension(payload: &Payload) {
+    /// #   #[cfg(all(feature = "extension", not(feature = "static")))]
     ///     let _ = loggery::extensions::save_to_file(payload, "path/to/app.log");
     /// }
     ///
     /// fn main() {
+    /// #   #[cfg(all(feature = "extension", not(feature = "static")))]
     ///     loggery::set_extension(my_extension);
     ///
     ///     debug!("A log message that will be saved to a file too!");
@@ -810,23 +838,28 @@ mod stdout {
     }
 }
 
-/// This module is included if the `static` feature is enabled to provide the default function
-/// implementations.
-#[cfg(feature = "static")]
-mod static_impl {
+/// This module is included if the `static` and `std` features are enabled to provide
+/// the default definition for log function.
+#[cfg(all(feature = "static", feature = "std"))]
+mod static_impl_std {
     use crate::Payload;
 
-    /// Default extension implementation for when the `extension` and `static` features are enabled.
-    #[cfg(feature = "extension")]
-    #[no_mangle]
-    pub extern "Rust" fn __loggery_extension_impl(_payload: &Payload) {
-        // NOP
-    }
-
     /// Default logger implementation for when the `std` and `static` features are enabled.
-    #[cfg(feature = "std")]
     #[no_mangle]
     pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
         crate::stdout::logger_fn(payload);
+    }
+}
+
+/// This module is included if the `static` and `extension` features are enabled to provide
+/// the default definition for extension function.
+#[cfg(all(feature = "static", feature = "extension"))]
+mod static_impl_extension {
+    use crate::Payload;
+
+    /// Default extension implementation for when the `extension` and `static` features are enabled.
+    #[no_mangle]
+    pub extern "Rust" fn __loggery_extension_impl(_payload: &Payload) {
+        // NOP
     }
 }
