@@ -2,9 +2,19 @@
 name = "loggery"
 version = "0.1.0"
 authors = ["Mohsen Rad (🌱) <irregular.celery@gmail.com>"]
+repository = "https://github.com/IrregularCelery/loggery"
+description = "A lightweight, `no_std`-friendly logging library for Rust"
+documentation = "https://docs.rs/loggery"
+readme = "README.md"
+keywords = ["log", "logging", "trace"]
+categories = ["development-tools::debugging", "no-std", "embedded"]
 edition = "2021"
 rust-version = "1.56.0"
 license = "MIT"
+
+[package.metadata.docs.rs]
+no-default-features = true
+features = ["std", "metadata", "extension", "runtime_level"]
 
 [features]
 default = ["std", "metadata", "runtime_level"]
