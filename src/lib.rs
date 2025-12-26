@@ -24,16 +24,31 @@
 //! error!("This is an ERROR log!");
 //! ```
 //!
+//! Output (default logger format):
+//!
+//! ```text
+//! [TRACE] This is a TRACE log!
+//! [DEBUG] This is a DEBUG log!
+//! [ INFO] This is an INFO log!
+//! [ WARN] This is a WARN log!
+//! [ERROR] This is an ERROR log!
+//! ```
+//!
 //! # Custom Logger
 //!
-//! > **Note:** [`set_logger`] isn't available if the `static` feature is enabled!
-//! > Check [Static](#static) instead.
+//! By default, logs are written in the format: `[LEVEL] message`,
+//! e.g., `[ERROR] Something went wrong!`.
+//!
+//! But you can implement your own:
 //!
 //! ```
 //! use loggery::{Payload, debug};
 //!
 //! fn my_logger(payload: Payload) {
 //!     // Your custom implementation
+//!
+//!     // For example, you can change the format of the logger
+//!     println!("[APPLICATION]-{}-({})", payload.level.as_str(), payload.args);
 //! }
 //!
 //! fn main() {
@@ -43,6 +58,15 @@
 //!     debug!("A log message using my custom logger!");
 //! }
 //! ```
+//!
+//! Output:
+//!
+//! ```text
+//! [APPLICATION]-DEBUG-(A log message using my custom logger!)
+//! ```
+//!
+//! > **Note:** [`set_logger`] isn't available if the `static` feature is enabled!
+//! > Read [Static](#static) for more details.
 //!
 //! # Runtime Level
 //!
@@ -60,14 +84,16 @@
 //! warn!("This will be logged");
 //! ```
 //!
-//! This works alongside compile-time filtering from `min_level_*` features.
+//! This works alongside compile-time filtering using `min_level_*` features.
 //! Runtime filtering can only be more restrictive, not less restrictive than compile-time feature.
+//! For example if the `min_level_info` feature is enabled, [`debug!`], [`trace!`] calls are
+//! removed at compile-time and cannot be re-enabled at runtime.
 //!
 //! # Static
 //!
 //! > **Note:** Only available when the `static` feature is enabled.
 //!
-//! For maximum performance in embedded or performance-critical applications, use the `static`
+//! For maximum performance or in embedded/performance-critical applications, use the `static`
 //! feature to remove the runtime indirection. Your logger is linked directly at compile time:
 //!
 //! ```toml
@@ -89,8 +115,16 @@
 //!     debug!("Direct call from custom static implementation!")
 //! }
 //! ```
+//! > **Tip:** You can use `static` with `std` feature if you want the default stdout logger with
+//! > static dispatch:
+//! >
+//! > ```toml
+//! > loggery = { version = "0.1.0", features = ["static"] } # `std` is enabled by default
+//! > ```
+//! >
+//! > This gives you direct compile-time linking without needing to define `__loggery_log_impl`.
 //!
-//! > **Note:** Even with `static` feature, you can still use the `runtime_level` feature and
+//! > **Tip:** Even with `static` feature, you can still use the `runtime_level` feature and
 //! > therefore the [`set_min_level`] function to do runtime log level filtering.
 //!
 //! <div class="warning">
@@ -132,15 +166,15 @@
 //!
 //! > **Note:** When the `static` feature is enabled, `set_extension` isn't available. Instead,
 //! > you can do this:
-//!
-//! ```no_run
-//! use loggery::Payload;
-//!
-//! #[no_mangle]
-//! pub extern "Rust" fn __loggery_extension_impl(payload: &Payload) {
-//!     // Your custom implementation
-//! }
-//! ```
+//! >
+//! > ```no_run
+//! > use loggery::Payload;
+//! >
+//! > #[no_mangle]
+//! > pub extern "Rust" fn __loggery_extension_impl(payload: &Payload) {
+//! >     // Your custom implementation
+//! > }
+//! > ```
 //!
 //! # Features
 //!
@@ -396,7 +430,7 @@ pub fn set_extension(extension_fn: ExtensionFn) {
 /// Sets the runtime minimum log level. (`runtime_level` feature)
 ///
 /// > You can also use the `min_level_*` features for compile-time level filtering.
-/// > (e.g. `min_level_warn` will disable all the log levels below [`warn!`] at compile-time.)
+/// > (e.g., `min_level_warn` will disable all the log levels below [`warn!`] at compile-time.)
 ///
 /// # Note
 ///
@@ -752,7 +786,7 @@ macro_rules! error {
     };
 }
 
-/// Built-in extensions utilities for common logging tasks.
+/// Built-in extension utilities for common logging tasks.
 ///
 /// These functions are desigend to be called from within your custom extension function.
 /// They must not be passed directly to the [`set_extension`] because they might need parameters.
