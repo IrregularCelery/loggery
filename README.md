@@ -29,16 +29,31 @@ warn!("This is a WARN log!");
 error!("This is an ERROR log!");
 ```
 
+Output (default logger format):
+
+```text
+[TRACE] This is a TRACE log!
+[DEBUG] This is a DEBUG log!
+[ INFO] This is an INFO log!
+[ WARN] This is a WARN log!
+[ERROR] This is an ERROR log!
+```
+
 ## Custom Logger
 
-> [!NOTE]
-> `set_logger` isn't available if the `static` feature is enabled! Check [Static](#static) instead.
+By default, logs are written in the format: `[LEVEL] message`,
+e.g., `[ERROR] Something went wrong!`.
+
+But you can implement your own:
 
 ```rust
 use loggery::{Payload, debug};
 
 fn my_logger(payload: Payload) {
     // Your custom implementation
+
+    // For example, you can change the format of the logger
+    println!("[APPLICATION]-{}-({})", payload.level.as_str(), payload.args);
 }
 
 fn main() {
@@ -47,6 +62,16 @@ fn main() {
     debug!("A log message using my custom logger!");
 }
 ```
+
+Output:
+
+```text
+[APPLICATION]-DEBUG-(A log message using my custom logger!)
+```
+
+> [!NOTE]
+> `set_logger` isn't available if the `static` feature is enabled! Read [Static](#static) for
+> more details.
 
 ## Runtime Level
 
@@ -64,16 +89,18 @@ debug!("This will NOT be logged");
 warn!("This will be logged");
 ```
 
-This works alongside compile-time filtering from `min_level_*` features.
+This works alongside compile-time filtering using `min_level_*` features.
 Runtime filtering can only be more restrictive, not less restrictive than compile-time feature.
+For example if the `min_level_info` feature is enabled, [`debug!`], [`trace!`] calls are removed
+at compile-time and cannot be re-enabled at runtime.
 
 ## Static
 
 > [!NOTE]
 > Only available when the `static` feature is enabled.
 
-For maximum performance in embedded or performance-critical applications, use the `static`
-feature to remove the runtime indirection. Your logger is linked directly at compile time:
+For maximum performance or in embedded/performance-critical applications, use the `static` feature
+to remove the runtime indirection. Your logger is linked directly at compile time:
 
 ```toml
 [dependencies]
@@ -100,7 +127,7 @@ fn main() {
 > dispatch:
 >
 > ```toml
-> loggery = { version = "0.1.0", features = ["static"] } # `std` feature is enabled by default
+> loggery = { version = "0.1.0", features = ["static"] } # `std` is enabled by default
 > ```
 >
 > This gives you direct compile-time linking without needing to define `__loggery_log_impl`.
