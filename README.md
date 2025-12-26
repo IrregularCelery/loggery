@@ -91,7 +91,7 @@ warn!("This will be logged");
 
 This works alongside compile-time filtering using `min_level_*` features.
 Runtime filtering can only be more restrictive, not less restrictive than compile-time feature.
-For example if the `min_level_info` feature is enabled, [`debug!`], [`trace!`] calls are removed
+For example if the `min_level_info` feature is enabled, `debug!`, `trace!` calls are removed
 at compile-time and cannot be re-enabled at runtime.
 
 ## Static
