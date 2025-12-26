@@ -1,6 +1,8 @@
 //! A lightweight, `no_std`-friendly logging library for Rust
 //! with support for compile-time filtering and optional runtime level control.
 //!
+//! > **Minimum Supported Rust Version:** `1.56.0`
+//!
 //! # Usage
 //!
 //! Add `loggery` to your `Cargo.toml`:
