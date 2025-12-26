@@ -95,7 +95,17 @@ fn main() {
 }
 ```
 
-> [!NOTE]
+> [!TIP]
+> You can use `static` with `std` feature if you want the default stdout logger with static
+> dispatch:
+>
+> ```toml
+> loggery = { version = "0.1.0", features = ["static"] } # `std` feature is enabled by default
+> ```
+>
+> This gives you direct compile-time linking without needing to define `__loggery_log_impl`.
+
+> [!TIP]
 > Even with `static` feature, you can still use the `runtime_level` feature and therefore
 > the `set_min_level` function to do runtime log level filtering.
 
