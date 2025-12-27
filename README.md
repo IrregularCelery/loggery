@@ -1,12 +1,12 @@
 # Loggery
 
-### A lightweight, `no_std`-friendly logging library for Rust.
-
 [![Build Status](https://img.shields.io/github/actions/workflow/status/IrregularCelery/loggery/ci.yml?branch=master)](https://github.com/IrregularCelery/loggery/actions)
 [![Crates.io](https://img.shields.io/crates/v/loggery.svg)](https://crates.io/crates/loggery)
 [![Documentation](https://docs.rs/loggery/badge.svg)](https://docs.rs/loggery)
 [![License](https://img.shields.io/crates/l/loggery.svg)](https://github.com/IrregularCelery/loggery/blob/master/LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.56.0-yellow)](https://blog.rust-lang.org/2021/10/21/Rust-1.56.0.html)
+
+### A lightweight, `no_std`-friendly logging library for Rust.
 
 ## Usage
 
