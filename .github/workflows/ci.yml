@@ -51,6 +51,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Build features (all features)
+        run: cargo build --all-features
+
       - name: Build features (no features)
         run: cargo build --no-default-features
 

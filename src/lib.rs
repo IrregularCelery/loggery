@@ -115,22 +115,27 @@
 //!     debug!("Direct call from custom static implementation!")
 //! }
 //! ```
-//! > **Tip:** You can use `static` with `std` feature if you want the default stdout logger with
-//! > static dispatch:
+//! > **Tip:** The feature combination of `std` and `static` is possible, but you'd still have to
+//! > define `__loggery_log_impl` function. If you want to use the default stdout static definition
+//! > provided by the crate, use `static_default` feature (enables `std` and `static` features
+//! > automatically):
 //! >
 //! > ```toml
-//! > loggery = { version = "0.1.0", features = ["static"] } # `std` is enabled by default
+//! > loggery = { version = "0.1.0", features = ["static_default"] }
 //! > ```
 //! >
 //! > This gives you direct compile-time linking without needing to define `__loggery_log_impl`.
+//!
+//! > **Note:** When using `static_default` feature, you **cannot** define your own
+//! > `__loggery_log_impl` function, as this will cause a duplicate symbol linker error!
 //!
 //! > **Tip:** Even with `static` feature, you can still use the `runtime_level` feature and
 //! > therefore the [`set_min_level`] function to do runtime log level filtering.
 //!
 //! <div class="warning">
 //!
-//! When using the `static` feature, you **must** provide the `__loggery_log_impl` function
-//! in your binary crate, or you'll get a linker error!
+//! When using the `static` feature, you **must** define `__loggery_log_impl` function in your
+//! binary crate, or you'll get a linker error!
 //!
 //! </div>
 //!
@@ -165,7 +170,7 @@
 //! ```
 //!
 //! > **Note:** When the `static` feature is enabled, `set_extension` isn't available. Instead,
-//! > you can do this:
+//! > you must do this:
 //! >
 //! > ```no_run
 //! > use loggery::Payload;
@@ -176,6 +181,13 @@
 //! > }
 //! > ```
 //!
+//! <div class="warning">
+//!
+//! When using `static` and `extension` features, you **must** define `__loggery_extension_impl`
+//! function in your binary crate, or you'll get a linker error!
+//!
+//! </div>
+//!
 //! # Features
 //!
 //! > **Default features:** `std`, `metadata`, `runtime_level`
@@ -184,6 +196,7 @@
 //! |-------------------|:-------:|---------------------------------------------------------------|
 //! | `std`             |  __✓__  | Enables default stdout logger                                 |
 //! | `static`          |  __✗__  | Enables static extern logger definition                       |
+//! | `static_default`  |  __✗__  | Provides default static logger (enables `std` + `static`)     |
 //! | `metadata`        |  __✓__  | Enables [`meta`](Metadata) field in the [`Payload`]           |
 //! | `extension`       |  __✗__  | Enables extension hooks for extra functionality               |
 //! | `runtime_level`   |  __✓__  | Allows changing log level filtering at runtime                |
@@ -301,12 +314,12 @@ extern "Rust" {
     /// **Warning:** Not providing this function will result in a linker error!
     fn __loggery_log_impl(payload: Payload);
 
-    /// External extension implementation that *CAN* be provided when using the `external` and
+    /// External extension implementation that *MUST* be provided when using the `extension` and
     /// `static` features.
     ///
     /// # Safety
     ///
-    /// When the `external` and `static` features are enabled, you can define this function in
+    /// When the `extension` and `static` features are enabled, you must define this function in
     /// your binary crate:
     ///
     /// ```no_run
@@ -318,8 +331,7 @@ extern "Rust" {
     /// }
     /// ```
     ///
-    /// **Note:** Not providing this function is fine since a NOP version is implementated
-    /// by default.
+    /// **Warning:** Not providing this function will result in a linker error!
     #[cfg(feature = "extension")]
     fn __loggery_extension_impl(payload: &Payload);
 }
@@ -370,6 +382,9 @@ static RUNTIME_MIN_LEVEL: core::sync::atomic::AtomicU8 =
 ///     // Your custom implementation
 /// }
 /// ```
+///
+/// > **Tip:** Alternatively, use the `static_default` feature to get a default stdout logger with
+/// > static dispatch (but you won't be able to define a custom `__loggery_log_impl` in that case).
 ///
 /// When the `std` feature is enabled, a default logger is automatically initialized if no logger
 /// has been set. This function can still be used to override that default.
