@@ -22,6 +22,7 @@ default = ["std", "metadata", "runtime_level"]
 
 std = []
 static = []
+static_default = ["std", "static"]
 metadata = []
 extension = []
 runtime_level = []

@@ -876,7 +876,7 @@ mod stdout {
 
 /// This module is included if the `static` and `std` features are enabled to provide
 /// the default definition for log function.
-#[cfg(all(feature = "static", feature = "std"))]
+#[cfg(feature = "static_default")]
 mod static_impl_std {
     use crate::Payload;
 
@@ -884,18 +884,5 @@ mod static_impl_std {
     #[no_mangle]
     pub extern "Rust" fn __loggery_log_impl(payload: Payload) {
         crate::stdout::logger_fn(payload);
-    }
-}
-
-/// This module is included if the `static` and `extension` features are enabled to provide
-/// the default definition for extension function.
-#[cfg(all(feature = "static", feature = "extension"))]
-mod static_impl_extension {
-    use crate::Payload;
-
-    /// Default extension implementation for when the `extension` and `static` features are enabled.
-    #[no_mangle]
-    pub extern "Rust" fn __loggery_extension_impl(_payload: &Payload) {
-        // NOP
     }
 }
