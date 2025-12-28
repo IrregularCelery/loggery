@@ -123,22 +123,28 @@ fn main() {
 ```
 
 > [!TIP]
-> You can use `static` with `std` feature if you want the default stdout logger with static
-> dispatch:
+> The feature combination of `std` and `static` is possible, but you'd still have to define
+> `__loggery_log_impl` function. If you want to use the default stdout static definition
+> provided by the crate, use `static_default` feature (enables `std` and `static` features
+> automatically):
 >
 > ```toml
-> loggery = { version = "0.1.0", features = ["static"] } # `std` is enabled by default
+> loggery = { version = "0.1.0", features = ["static_default"] }
 > ```
 >
 > This gives you direct compile-time linking without needing to define `__loggery_log_impl`.
+
+> [!NOTE]
+> When using `static_default` feature, you **cannot** define your own `__loggery_log_impl` function,
+> as this will cause a duplicate symbol linker error!
 
 > [!TIP]
 > Even with `static` feature, you can still use the `runtime_level` feature and therefore
 > the `set_min_level` function to do runtime log level filtering.
 
 > [!WARNING]
-> When using the `static` feature, you **must** provide the `__loggery_log_impl` function
-> in your binary crate, or you'll get a linker error!
+> When using the `static` feature, you **must** define `__loggery_log_impl` function in your binary
+> crate, or you'll get a linker error!
 
 ## Extensions
 
@@ -171,31 +177,36 @@ fn main() {
 ```
 
 > [!NOTE]
-> When the `static` feature is enabled, `set_extension` isn't available. Instead, you can do this:
+> When the `static` feature is enabled, `set_extension` isn't available. Instead, you must do this:
 >
 > ```rust
 > use loggery::Payload;
 >
 > #[no_mangle]
 > pub extern "Rust" fn __loggery_extension_impl(payload: &Payload) {
->    // Your custom implementation
+>     // Your custom implementation
 > }
 > ```
+
+> [!WARNING]
+> When using `static` and `extension` features, you **must** define `__loggery_extension_impl`
+> function in your binary crate, or you'll get a linker error!
 
 ## Features
 
 > **Default features:** `std`, `metadata`, `runtime_level`
 
-| Feature           | Default | Description                                         |
-| ----------------- | :-----: | --------------------------------------------------- |
-| `std`             |  **✓**  | Enables default stdout logger                       |
-| `static`          |  **✗**  | Enables static extern logger definition             |
-| `metadata`        |  **✓**  | Enables `meta` field in the `Payload`               |
-| `extension`       |  **✗**  | Enables extension hooks for extra functionality     |
-| `runtime_level`   |  **✓**  | Allows changing log level filtering at runtime      |
-| `min_level_off`   |  **✗**  | Disables all logs at compile time                   |
-| `min_level_trace` |  **✗**  | Only logs `trace`, `debug`, `info`, `warn`, `error` |
-| `min_level_debug` |  **✗**  | Only logs `debug`, `info`, `warn`, `error`          |
-| `min_level_info`  |  **✗**  | Only logs `info`, `warn`, `error`                   |
-| `min_level_warn`  |  **✗**  | Only logs `warn`, `error`                           |
-| `min_level_error` |  **✗**  | Only logs `error`                                   |
+| Feature           | Default | Description                                               |
+| ----------------- | :-----: | --------------------------------------------------------- |
+| `std`             |  **✓**  | Enables default stdout logger                             |
+| `static`          |  **✗**  | Enables static extern logger definition                   |
+| `static_default`  |  **✗**  | Provides default static logger (enables `std` + `static`) |
+| `metadata`        |  **✓**  | Enables `meta` field in the `Payload`                     |
+| `extension`       |  **✗**  | Enables extension hooks for extra functionality           |
+| `runtime_level`   |  **✓**  | Allows changing log level filtering at runtime            |
+| `min_level_off`   |  **✗**  | Disables all logs at compile time                         |
+| `min_level_trace` |  **✗**  | Only logs `trace`, `debug`, `info`, `warn`, `error`       |
+| `min_level_debug` |  **✗**  | Only logs `debug`, `info`, `warn`, `error`                |
+| `min_level_info`  |  **✗**  | Only logs `info`, `warn`, `error`                         |
+| `min_level_warn`  |  **✗**  | Only logs `warn`, `error`                                 |
+| `min_level_error` |  **✗**  | Only logs `error`                                         |
