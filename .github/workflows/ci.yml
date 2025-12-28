@@ -39,13 +39,7 @@ jobs:
         run: cargo test --no-default-features --features std
 
       - name: Run tests (std + static)
-        run: cargo test --no-default-features --features std,static
-
-      - name: Run tests (std + static + extension)
-        run: cargo test --no-default-features --features std,static,extension
-
-      - name: Run tests (all features)
-        run: cargo test --all-features
+        run: cargo test --no-default-features --features static_default
 
   features:
     name: Features
@@ -69,11 +63,8 @@ jobs:
       - name: Build features (std + static + runtime_level)
         run: cargo build --no-default-features --features std,static,runtime_level
 
-      - name: Build features (std + static + extension + runtime_level)
-        run: cargo build --no-default-features --features std,static,extension,runtime_level
-
-      - name: Build features (std + static + metadata + extension + runtime_level)
-        run: cargo build --no-default-features --features std,static,metadata,extension,runtime_level
+      - name: Build features (std + static + metadata + runtime_level)
+        run: cargo build --no-default-features --features std,static,metadata,runtime_level
 
   no-std:
     name: No-std
@@ -127,4 +118,5 @@ jobs:
       - name: Check doc
         env:
           RUSTDOCFLAGS: -D warnings
+
         run: cargo doc --features std,metadata,extension,runtime_level

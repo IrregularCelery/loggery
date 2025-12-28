@@ -857,7 +857,10 @@ pub mod extensions {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(
+    all(feature = "std", not(feature = "static")),
+    feature = "static_default",
+))]
 mod stdout {
     extern crate std;
 
@@ -874,8 +877,8 @@ mod stdout {
     }
 }
 
-/// This module is included if the `static` and `std` features are enabled to provide
-/// the default definition for log function.
+/// This module is included if the `static_default` feature is enabled to provide a default
+/// definition for log function.
 #[cfg(feature = "static_default")]
 mod static_impl_std {
     use crate::Payload;
